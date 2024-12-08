@@ -35,7 +35,7 @@ class consts:
 					if(key != parser.instruction):
 						ERROR("Invalid key for 'enum'", key.line_number, key.file)
 
-					const_dict[key.value] = parser.decimal_literal(str(enum_value))
+					const_dict[key.value] = [parser.decimal_literal(str(enum_value))]
 					enum_value += 1
 					read_line(code)
 
@@ -47,7 +47,7 @@ class consts:
 	def expand_consts(tokens, const_dict):
 		out_code = []
 		for token in tokens:
-			if(token in [parser.instruction, parser.sub_instruction, parser.variable]  and token.value in const_dict):
+			if(token in [parser.instruction, parser.sub_instruction, parser.variable] and token.value in const_dict):
 				#print(token.value)
 				for const_token in const_dict[token.value]:
 					out_code.append(const_token)

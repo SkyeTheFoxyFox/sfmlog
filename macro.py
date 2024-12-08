@@ -124,8 +124,8 @@ def expand_macro(out_code, macro, macro_name, args, macro_list, macro_called_lis
 					ERROR("Failed to expand argument as macro name, as it is undefined", mac_name.line_number, mac_name.file)
 			if(mac_name != parser.variable or mac_name.value not in macro_list):
 				ERROR("Unknown macro", mac_name.line_number, mac_name.file)
-			if(mac_name.value in macro_called_list):
-				ERROR("Can't call macro within itself", mac_name.line_number, mac_name.file)
+			#if(mac_name.value in macro_called_list):
+			#	ERROR("Can't call macro within itself", mac_name.line_number, mac_name.file)
 			macro_args = []
 			arg = code.pop(0)
 			while(arg != parser.line_break):
@@ -150,8 +150,11 @@ def expand_macro(out_code, macro, macro_name, args, macro_list, macro_called_lis
 				arg = code.pop(0)
 
 			
+			try:
+				expand_macro(out_code, macro_list[mac_name.value], mac_name.value, macro_args, macro_list, macro_called_list.copy())
+			except RecursionError:
+				ERROR("Recursion limit reached", mac_name.line_number, mac_name.file)
 
-			expand_macro(out_code, macro_list[mac_name.value], mac_name.value, macro_args, macro_list, macro_called_list.copy())
 		elif(mac_token == parser.macro_variable):
 			try:
 				out_code.append(args[mac_token.value])
