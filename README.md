@@ -1,5 +1,5 @@
-# sfmlog
+# Sfmlog
 
-A mindustry logic (mlog) transpiler that adds features such as file importing, constant definitions, macros, and a preprocessor for doing math and unrolling loops
+A mindustry logic (mlog) transpiler adding macros and a bunch of other preprocessor stuff.
 
-requires `pyperclip`
+requires `pyperclip` and `pymsch`
