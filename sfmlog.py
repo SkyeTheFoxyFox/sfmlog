@@ -1,4 +1,4 @@
-import sys, argparse, pathlib, re, pymsch, math, random, time, copy, json
+import sys, argparse, pathlib, re, pymsch, math, random, time, dill, json, io
 
 def _error(text: str, token, executer):
     print(f"Error: {text}\nTraceback (most recent call last):")
@@ -283,6 +283,7 @@ class _executer:
             executer.init_instruction("strvar", inst.I_strvar)
             executer.init_instruction("list", inst.I_list)
             executer.init_instruction("table", inst.I_table)
+            executer.init_instruction("file", inst.I_file)
             executer.init_instruction("if", inst.I_if)
             executer.init_instruction("while", inst.I_while)
             executer.init_instruction("for", inst.I_for)
@@ -544,7 +545,7 @@ class _executer:
                     input_list = inst[3]
                     if input_list.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_list)
-                        lst = copy.deepcopy(var.value) if var.type == "list" else []
+                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
                     else:
                         lst = []
                     value = executer.resolve_var(inst[4])
@@ -561,7 +562,7 @@ class _executer:
                     input_list = inst[3]
                     if input_list.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_list)
-                        lst = copy.deepcopy(var.value) if var.type == "list" else []
+                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
                     else:
                         lst = []
                     index = executer.resolve_var(inst[4])
@@ -576,7 +577,7 @@ class _executer:
                     input_list = inst[3]
                     if input_list.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_list)
-                        lst = copy.deepcopy(var.value) if var.type == "list" else []
+                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
                     else:
                         lst = []
                     value = executer.resolve_var(inst[4])
@@ -587,7 +588,7 @@ class _executer:
                     input_list = inst[3]
                     if input_list.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_list)
-                        lst = copy.deepcopy(var.value) if var.type == "list" else []
+                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
                     else:
                         lst = []
                     value = executer.resolve_var(inst[4])
@@ -601,7 +602,7 @@ class _executer:
                     input_list = inst[3]
                     if input_list.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_list)
-                        lst = copy.deepcopy(var.value) if var.type == "list" else []
+                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
                     else:
                         lst = []
                     index = executer.resolve_var(inst[4])
@@ -625,7 +626,7 @@ class _executer:
                     input_elem = executer.resolve_var(inst[4])
                     if input_list.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_list)
-                        lst = copy.deepcopy(var.value) if var.type == "list" else []
+                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
                     else:
                         lst = []
                     if executer.resolve_var(input_list).type == "list":
@@ -643,7 +644,7 @@ class _executer:
                     input_elem = executer.resolve_var(inst[4])
                     if input_list.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_list)
-                        lst = copy.deepcopy(var.value) if var.type == "list" else []
+                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
                     else:
                         lst = []
                     if executer.resolve_var(input_list).type == "list":
@@ -679,7 +680,7 @@ class _executer:
                     input_table = inst[3]
                     if input_table.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_table)
-                        tbl = copy.deepcopy(var.value) if var.type == "table" else {}
+                        tbl = dill.loads(dill.dumps(var.value)) if var.type == "table" else {}
                     else:
                         tbl = {}
                     key = executer.resolve_var(inst[4])
@@ -693,7 +694,7 @@ class _executer:
                     input_table = inst[3]
                     if input_table.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_table)
-                        tbl = copy.deepcopy(var.value) if var.type == "table" else {}
+                        tbl = dill.loads(dill.dumps(var.value)) if var.type == "table" else {}
                     else:
                         tbl = {}
                     key = executer.resolve_var(inst[4])
@@ -706,7 +707,7 @@ class _executer:
                     input_table = inst[3]
                     if input_table.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_table)
-                        tbl = copy.deepcopy(var.value) if var.type == "table" else {}
+                        tbl = dill.loads(dill.dumps(var.value)) if var.type == "table" else {}
                     else:
                         tbl = {}
                     key = executer.resolve_var(inst[4])
@@ -720,7 +721,7 @@ class _executer:
                     input_table = inst[3]
                     if input_table.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_table)
-                        tbl = copy.deepcopy(var.value) if var.type == "table" else {}
+                        tbl = dill.loads(dill.dumps(var.value)) if var.type == "table" else {}
                     else:
                         tbl = {}
                     key = executer.resolve_var(inst[4])
@@ -737,12 +738,60 @@ class _executer:
                 #    input_table = inst[3]
                 #    if input_table.type in ["identifier", "global_identifier"]:
                 #        var = executer.resolve_var(input_table)
-                #        tbl = copy.deepcopy(var.value) if var.type == "table" else {}
+                #        tbl = dill.loads(dill.dumps(var.value)) if var.type == "table" else {}
                 #    else:
                 #        tbl = {}
                 #    executer.write_var(output_str, executer.convert_to_var(json.dumps(executer.convert_var_to_py(executer.resolve_var(input_table)))))
                 case _:
                     _error(f"Unknown table operation \"{inst[1].value}\"", inst[1], executer) 
+
+        def I_file(inst, executer): # Performs file operations
+            output_var = inst[2]
+            match inst[1].value:
+                case "open":
+                    path = pathlib.Path(executer.resolve_string(inst[3]))
+                    if not path.is_absolute():
+                        path = executer.cwd / path
+                    try:
+                        executer.write_var(output_var, executer.convert_to_var(open(path, "r")))
+                    except FileNotFoundError:
+                        _error(f"File {path} not found", inst[3], executer)
+                    except OSError as e:
+                        _error(f"Failed to open file: {e.message}", inst[3], executer)
+                case "openbin":
+                    path = pathlib.Path(executer.resolve_string(inst[3]))
+                    if not path.is_absolute():
+                        path = executer.cwd / path
+                    try:
+                        executer.write_var(output_var, executer.convert_to_var(open(path, "rb")))
+                    except FileNotFoundError:
+                        _error(f"File {path} not found", inst[3], executer)
+                case "close":
+                    file = executer.resolve_var(inst[2])
+                    if file.type not in ["text_file", "bin_file"]:
+                        _error(f"Expected file, got {file.type}", inst[2], executer)
+                    file.value.close()
+                case "read":
+                    file = executer.resolve_var(inst[3])
+                    if file.type != "text_file":
+                        _error(f"Expected type 'text_file', got type '{file.type}'", inst[3], executer)
+                    executer.write_var(output_var, executer.convert_to_var(file.value.read()))
+                case "readbytes":
+                    file = executer.resolve_var(inst[3])
+                    count = executer.resolve_var(inst[4])
+                    endianness = executer.resolve_var(inst.option(5, executer.convert_to_var('"big"')))
+                    if file.type != "bin_file":
+                        _error(f"Expected type 'bin_file', got type '{file.type}'", inst[3], executer)
+                    if count.type != "number":
+                        _error(f"Expected type 'number', got type '{count.type}'", inst[4], executer)
+                    if count.value > 32 or count.value <= 0:
+                        _error(f"Byte count should be between 1 and 32", inst[4], executer)
+                    if endianness.type != "string":
+                        print(endianness.type)
+                        _error(f"Expected type 'string', got type '{endianness.type}'", inst[5], executer)
+                    if endianness.value not in ['"big"', '"little"']:
+                        _error(f"Invalid endianness, should be 'big' or 'little'", inst[5], executer)
+                    executer.write_var(output_var, executer.convert_to_var(int.from_bytes(file.value.read(int(count.value)), byteorder=executer.resolve_string(endianness))))
         
         def I_if(inst, executer): # Runs code depending on a condition
             code_sections = executer.read_sections("end", _executer.Instructions.BLOCK_INSTRUCTIONS, ["elif", "else"])
@@ -855,7 +904,10 @@ class _executer:
             if default is None:
                 default = _tokenizer.token("null", "null").at_token(self.tokens[-1])
             try:
-                return self.tokens[index]
+                if self.tokens[index].type != "line_break":
+                    return self.tokens[index]
+                else:
+                    return default
             except IndexError:
                 return default
 
@@ -1014,16 +1066,20 @@ class _executer:
                 return _tokenizer.token("macro", value, exportable = False)
             case _Color():
                 return _tokenizer.token("color", value)
+            case io.TextIOWrapper():
+                return _tokenizer.token("text_file", value, exportable = False)
+            case io.BufferedReader():
+                return _tokenizer.token("bin_file", value, exportable = False)
             case None:
                 return _tokenizer.token("null", "null")
-            case _tokenizer.token():
+            case _ as v if v.__class__.__name__ == "token":
                 return value
             case _:
                 raise Exception(f"Unhandled type '{type(value)}'")
 
     def convert_var_to_py(self, var):
         match var.type:
-            case ("number"|"content"|"identifier"|"global_identifier"|"unscoped_identifier"|"block"):
+            case ("number"|"content"|"identifier"|"global_identifier"|"unscoped_identifier"|"block"|"text_file"|"bin_file"):
                 return var.value
             case "string":
                 return var.value[1:-1]
