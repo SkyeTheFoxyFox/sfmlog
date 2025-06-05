@@ -432,9 +432,10 @@ class _executer:
             str_op = inst[1]
             str_out = inst[2]
             str_in = executer.resolve_string(inst[3])
-            out_val = ""
+            out_val = None
             match str_op.value:
                 case "cat":
+                    out_val = ""
                     for token in inst.tokens[3:-1]:
                         out_val += executer.resolve_string(token)
                 case "num":
@@ -460,7 +461,48 @@ class _executer:
                         out_val = str_in[int(start.value):int(end.value)]
                     else:
                         out_val = str_in[int(start.value):]
-            executer.write_var(str_out, executer.convert_to_var(out_val))
+                case "rematch":
+                    pattern = executer.resolve_string(inst[4])
+                    try:
+                        match_val = re.search(pattern, str_in)
+                        if match_val is not None:
+                            out_val = match_val[0]
+                        else:
+                            executer.write_var(str_out, executer.convert_to_var(None))
+                    except re.PatternError as e:
+                        _error(f"Invalid regex pattern: {e.message}", inst[5], executer)
+                case "refind":
+                    string = executer.resolve_string(inst[4])
+                    pattern = executer.resolve_string(inst[5])
+                    try:
+                        match_val = re.search(pattern, string)
+                        if match_val is not None:
+                            executer.write_var(inst[2], executer.convert_to_var(match_val.start()))
+                            executer.write_var(inst[3], executer.convert_to_var(match_val.end()))
+                        else:
+                            executer.write_var(inst[2], executer.convert_to_var(None))
+                            executer.write_var(inst[3], executer.convert_to_var(None))
+                    except re.PatternError as e:
+                        _error(f"Invalid regex pattern: {e.message}", inst[5], executer)
+                case "regroups":
+                    pattern = executer.resolve_string(inst[4])
+                    try:
+                        match_val = re.search(pattern, str_in)
+                        if match_val is not None:
+                            out_val = match_val.groups()
+                        else:
+                            executer.write_var(str_out, executer.convert_to_var(None))
+                    except re.PatternError as e:
+                        _error(f"Invalid regex pattern: {e.message}", inst[4], executer)
+                case "rematchall":
+                    pattern = executer.resolve_string(inst[4])
+                    try:
+                        out_val = re.findall(pattern, str_in)
+                    except re.PatternError as e:
+                        _error(f"Invalid regex pattern: {e.message}", inst[4], executer)
+            
+            if out_val is not None:    
+                executer.write_var(str_out, executer.convert_to_var(out_val))
 
         def I_strlabel(inst, executer): # Creates a label from a string
             value = executer.resolve_var(inst[1])
@@ -958,7 +1000,7 @@ class _executer:
                 return _tokenizer.token("content", value)
             case str():
                 return _tokenizer.token("string", '"' + value + '"' )
-            case list():
+            case list() | tuple():
                 lst = []
                 for item in value:
                     lst.append(self.convert_to_var(item))
