@@ -122,6 +122,8 @@ class _tokenizer:
                 return str(self.scope) + str(self.value)
             elif self.type in ["global_identifier", "global_label"]:
                 return f"global_{str(self.value)}"
+            elif self.type == "number":
+                return str(self.value).removesuffix(".0")
             else:
                 return str(self.value)
 
@@ -429,22 +431,17 @@ class _executer:
         def I_strop(inst, executer): # Performs string operations
             str_op = inst[1]
             str_out = inst[2]
-            str_in = str(executer.convert_var_to_py(executer.resolve_var(inst[3])))
+            str_in = executer.resolve_string(inst[3])
             out_val = ""
             match str_op.value:
                 case "cat":
-                    str_in2 = str(executer.convert_var_to_py(executer.resolve_var(inst[4])))
-                    out_val = str_in + str_in2
+                    for token in inst.tokens[3:-1]:
+                        out_val += executer.resolve_string(token)
                 case "num":
                     try:
                         out_val = float(str_in)
                     except:
                         _error("Unable to convert to number", inst[3])
-                case "int":
-                    try:
-                        out_val = str(int(executer.convert_var_to_py(executer.resolve_var(inst[3]))))
-                    except:
-                        out_val = None
                 case "substr":
                     start = executer.resolve_var(inst[4])
                     if start.type != "number":
@@ -786,10 +783,10 @@ class _executer:
                 executer.write_var(arg, block_executer.resolve_var(arg))
             
         def I_log(inst, executer): # Writes out to the console
-            print("".join(map(executer.resolve_log ,inst.tokens[1:-1])))
+            print("".join(map(executer.resolve_string ,inst.tokens[1:-1])))
 
         def I_error(inst, executer):
-            _error("".join(map(executer.resolve_log ,inst.tokens[1:-1])), inst[0], executer)
+            _error("".join(map(executer.resolve_string ,inst.tokens[1:-1])), inst[0], executer)
 
     class InstructionLine:
         def __init__(self, tokens, executer):
@@ -864,8 +861,8 @@ class _executer:
             print(_tokenizer.token_list_to_str(self.output))
         if self.is_root:
             self.schem_builder.processor_type = self.global_vars["global_PROCESSOR_TYPE"]
-            self.schem_builder.set_name(self.resolve_log(self.global_vars["global_SCHEMATIC_NAME"]))
-            self.schem_builder.set_desc(self.resolve_log(self.global_vars["global_SCHEMATIC_DESCRIPTION"]))
+            self.schem_builder.set_name(self.resolve_string(self.global_vars["global_SCHEMATIC_NAME"]))
+            self.schem_builder.set_desc(self.resolve_string(self.global_vars["global_SCHEMATIC_DESCRIPTION"]))
 
     def check_for_proc(self) -> bool:
         for inst in self.read_lines():
@@ -1000,7 +997,7 @@ class _executer:
         else:
             return name.with_scope(self.scope_str)
 
-    def resolve_log(self, token: _tokenizer.token) -> str:
+    def resolve_string(self, token: _tokenizer.token) -> str:
         if self.resolve_var(token).type == "string":
             return self.resolve_var(token).value[1:-1].replace("\\n", "\n")
         elif self.resolve_var(token).type == "list":
