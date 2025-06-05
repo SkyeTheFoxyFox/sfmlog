@@ -441,15 +441,22 @@ class _executer:
                     try:
                         out_val = float(str_in)
                     except:
-                        _error("Unable to convert to number", inst[3])
+                        _error("Unable to convert to number", inst[3], executer)
+                case "charat":
+                    if executer.resolve_var(inst[4]).type != "number":
+                        _error("Expected numeric value", inst[4], executer)
+                    try:
+                        out_val = str_in[int(executer.resolve_var(inst[4]).value)]
+                    except IndexError:
+                        _error("Index out of bounds for string", inst[4], executer)
                 case "substr":
                     start = executer.resolve_var(inst[4])
                     if start.type != "number":
-                        _error("Expected numeric value", inst[4])
+                        _error("Expected numeric value", inst[4], executer)
                     if 5 in inst:
                         end = executer.resolve_var(inst[5])
                         if end.type != "number":
-                            _error("Expected numeric value", inst[5])
+                            _error("Expected numeric value", inst[5], executer)
                         out_val = str_in[int(start.value):int(end.value)]
                     else:
                         out_val = str_in[int(start.value):]
