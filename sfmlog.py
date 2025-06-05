@@ -378,7 +378,8 @@ class _executer:
                 mac = executer.macros[inst[1].value]
                 if mac.name not in executer.macro_run_counts:
                     executer.macro_run_counts[mac.name] = 0
-                mac_executer = _executer(inst, mac.code, executer.cwd, executer.global_vars, f"{executer.scope_str}{mac.name}_{executer.macro_run_counts[mac.name]}_", executer.schem_builder, executer.owners + [executer.spawn_instruction])
+                mac_executer = _executer(inst, mac.code, executer.cwd, executer.global_vars, f"_{mac.name}_{executer.macro_run_counts[mac.name]}_", executer.schem_builder, executer.owners + [executer.spawn_instruction])
+                mac_executer.macro_run_counts = executer.macro_run_counts
                 for index, arg in enumerate(mac.args):
                     var_token = inst[index + 2] if index + 2 in inst else executer.convert_to_var(None)
                     mac_executer.write_var(arg, executer.resolve_var(var_token))
@@ -1368,3 +1369,5 @@ if __name__ == "__main__":
 
     if args.copy:
         out_schem.write_clipboard()
+    if args.out:
+        out_schem.write_file(args.out)
