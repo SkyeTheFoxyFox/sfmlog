@@ -306,9 +306,7 @@ class _executer:
                 _error(f"File '{import_file}' not found", inst[1], executer)
             import_tokenizer = _tokenizer(import_code, import_file)
             import_executer = _executer(inst, import_tokenizer.tokens , import_file.parent, executer.global_vars, executer.scope_str, executer.schem_builder, executer.owners + [executer.spawn_instruction])
-            for name, macro in executer.macros.items():
-                if name[0] != "_":
-                    import_executer.macros[name] = macro
+            import_executer.macros = executer.macros
             import_executer.vars = executer.vars
             import_executer.allow_mlog = executer.allow_mlog
             import_executer.macro_run_counts = executer.macro_run_counts
