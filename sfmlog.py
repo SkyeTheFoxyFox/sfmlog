@@ -50,10 +50,11 @@ class _Color:
         return f"%{self.to_hex()}"
 
 class _Macro:
-    def __init__(self, name, code, args):
+    def __init__(self, name, code, args, cwd):
         self.name: str = name
         self.code: list[_tokenizer.token] = code
         self.args: list[_tokenizer.token] = args
+        self.cwd: pathlib.Path = cwd
 
     def __str__(self):
         return f"macro({self.name})"
@@ -65,7 +66,10 @@ class SFMlog:
     def transpile(self, code: str, file: pathlib.Path) -> str:
         tokenizer = _tokenizer(code, file)
         schem_builder = _schem_builder()
-        executer = _executer(None, tokenizer.tokens, file.parent, {}, "_", schem_builder, [])
+        executer = _executer(None, tokenizer.tokens)
+        executer.cwd = file.parent
+        executer.global_cwd = file.parent
+        executer.schem_builder = schem_builder
         executer.as_root_level()
         executer.execute()
         schem_builder.make_schem()
@@ -305,11 +309,9 @@ class _executer:
             except FileNotFoundError:
                 _error(f"File '{import_file}' not found", inst[1], executer)
             import_tokenizer = _tokenizer(import_code, import_file)
-            import_executer = _executer(inst, import_tokenizer.tokens , import_file.parent, executer.global_vars, executer.scope_str, executer.schem_builder, executer.owners + [executer.spawn_instruction])
-            import_executer.macros = executer.macros
-            import_executer.vars = executer.vars
-            import_executer.allow_mlog = executer.allow_mlog
-            import_executer.macro_run_counts = executer.macro_run_counts
+            import_executer = executer.child(inst, import_tokenizer.tokens)
+            import_executer.cwd = import_file.parent
+            import_executer.owners = executer.owners + [inst]
             import_executer.execute()
             executer.output.extend(import_executer.output)
 
@@ -341,8 +343,10 @@ class _executer:
             proc_code = executer.read_till("end", _executer.Instructions.BLOCK_INSTRUCTIONS)
             if proc_code is None:
                 _error("'end' expected, but not found", inst[0], executer)
-            proc_executer = _executer(executer.spawn_instruction, proc_code, executer.cwd, executer.global_vars, "_", executer.schem_builder, executer.owners)
-            proc_executer.macros = executer.macros
+            proc_executer = executer.child(executer.spawn_instruction, proc_code)
+            proc_executer.scope_str = "_"
+            proc_executer.vars = {}
+            proc_executer.macro_run_counts = {}
             proc_executer.execute()
             if 4 in inst:
                 proc_type = executer.resolve_var(inst[2])
@@ -374,15 +378,18 @@ class _executer:
                 if arg.type != "identifier":
                     _error("Invalid name for macro argument", arg, executer)
                 mac_args.append(arg)
-            executer.macros[inst[1].value] = _Macro(inst[1].value, mac_code, mac_args)
+            executer.macros[inst[1].value] = _Macro(inst[1].value, mac_code, mac_args, executer.cwd)
 
         def I_mac(inst, executer): # Calls a macro
             if inst[1].value in executer.macros:
                 mac = executer.macros[inst[1].value]
                 if mac.name not in executer.macro_run_counts:
                     executer.macro_run_counts[mac.name] = 0
-                mac_executer = _executer(inst, mac.code, executer.cwd, executer.global_vars, f"_{mac.name}_{executer.macro_run_counts[mac.name]}_", executer.schem_builder, executer.owners + [executer.spawn_instruction])
-                mac_executer.macro_run_counts = executer.macro_run_counts
+                mac_executer = executer.child(inst, mac.code, )
+                mac_executer.scope_str = f"_{mac.name}_{executer.macro_run_counts[mac.name]}_"
+                mac_executer.owners = executer.owners + [executer.spawn_instruction]
+                mac_executer.cwd = mac.cwd
+                mac_executer.vars = {}
                 for index, arg in enumerate(mac.args):
                     var_token = inst[index + 2] if index + 2 in inst else executer.convert_to_var(None)
                     mac_executer.write_var(arg, executer.resolve_var(var_token))
@@ -751,7 +758,7 @@ class _executer:
                 case "open":
                     path = pathlib.Path(executer.resolve_string(inst[3]))
                     if not path.is_absolute():
-                        path = executer.cwd / path
+                        path = executer.global_cwd / path
                     try:
                         executer.write_var(output_var, executer.convert_to_var(open(path, "r")))
                     except FileNotFoundError:
@@ -761,7 +768,7 @@ class _executer:
                 case "openbin":
                     path = pathlib.Path(executer.resolve_string(inst[3]))
                     if not path.is_absolute():
-                        path = executer.cwd / path
+                        path = executer.global_cwd / path
                     try:
                         executer.write_var(output_var, executer.convert_to_var(open(path, "rb")))
                     except FileNotFoundError:
@@ -800,11 +807,7 @@ class _executer:
 
             for instruction, code_block in code_sections:
                 if instruction[0].value == "else" or executer.eval_condition(instruction[1], executer.resolve_var(instruction[2]), executer.resolve_var(instruction.option(3))).value:
-                    block_executer = _executer(executer.spawn_instruction, code_block, executer.cwd, executer.global_vars, executer.scope_str, executer.schem_builder, executer.owners)
-                    block_executer.macros = executer.macros
-                    block_executer.vars = executer.vars
-                    block_executer.allow_mlog = executer.allow_mlog
-                    block_executer.macro_run_counts = executer.macro_run_counts
+                    block_executer = executer.child(executer.spawn_instruction, code_block)
                     block_executer.execute()
                     executer.output.extend(block_executer.output)
                     break
@@ -814,11 +817,7 @@ class _executer:
             if code_block is None:
                 _error("'end' expected, but not found", inst[0], executer)
             while executer.eval_condition(inst[1], executer.resolve_var(inst[2]), executer.resolve_var(inst.option(3))).value:
-                block_executer = _executer(executer.spawn_instruction, code_block, executer.cwd, executer.global_vars, executer.scope_str, executer.schem_builder, executer.owners)
-                block_executer.macros = executer.macros
-                block_executer.vars = executer.vars
-                block_executer.allow_mlog = executer.allow_mlog
-                block_executer.macro_run_counts = executer.macro_run_counts
+                block_executer = executer.child(executer.spawn_instruction, code_block)
                 block_executer.execute()
                 executer.output.extend(block_executer.output)
         
@@ -859,11 +858,7 @@ class _executer:
                         executer.write_var(inst[2+index], executer.convert_to_var(value))
                 else:
                     executer.write_var(inst[2], executer.convert_to_var(i))
-                block_executer = _executer(executer.spawn_instruction, code_block, executer.cwd, executer.global_vars, executer.scope_str, executer.schem_builder, executer.owners)
-                block_executer.macros = executer.macros
-                block_executer.vars = executer.vars
-                block_executer.allow_mlog = executer.allow_mlog
-                block_executer.macro_run_counts = executer.macro_run_counts
+                block_executer = executer.child(executer.spawn_instruction, code_block)
                 block_executer.execute()
                 executer.output.extend(block_executer.output)
 
@@ -871,9 +866,12 @@ class _executer:
             code_block = executer.read_till("end", _executer.Instructions.BLOCK_INSTRUCTIONS)
             if code_block is None:
                 _error("'end' expected, but not found", inst[0], executer)
-            block_executer = _executer(executer.spawn_instruction, code_block, executer.cwd, executer.global_vars.copy(), executer.scope_str, None, executer.owners)
+            block_executer = executer.child(executer.spawn_instruction, code_block)
             block_executer.macros = executer.macros.copy()
             block_executer.vars = executer.vars.copy()
+            block_executer.global_vars = executer.global_vars.copy()
+            block_executer.macro_run_counts = {}
+            block_executer.schem_builder = None
             block_executer.execute()
             for arg in inst.tokens[1:-1]:
                 if arg.type not in ["identifier", "global_identifier"]:
@@ -926,25 +924,39 @@ class _executer:
         def __len__(self):
             return len(self.tokens)
 
-    def __init__(self, spawn_instruction, code: list[_tokenizer.token], cwd: pathlib.Path, global_vars: dict[str, _tokenizer.token], scope_str: str, schem_builder, owners: list):
+    def __init__(self, spawn_instruction, code: list[_tokenizer.token]):
         self.instructions: list[Instruction] = []
         self.Instructions.init_instructions(self)
-        self.owners = owners
+        self.owners = []
         self.spawn_instruction = spawn_instruction
         self.code: list[_tokenizer.token] = code
         self.lines = self.read_lines()
         self.output: list[_tokenizer.token] = []
-        self.cwd: pathlib.Path = cwd
-        self.scope_str = scope_str
+        self.cwd: pathlib.Path = None
+        self.global_cwd: pathlib.Path = None
+        self.scope_str = "_"
         self.macros: dict[str, _Macro] = {}
         self.macro_run_counts: dict[str, int] = {}
         self.vars: dict[str, _tokenizer.token] = {}
-        self.global_vars: dict[str, _tokenizer.token] = global_vars
+        self.global_vars: dict[str, _tokenizer.token] = {}
         self.allow_mlog = True
         self.is_root = False
-        self.schem_builder = schem_builder
+        self.schem_builder = None
 
         self.exec_pointer = 0
+
+    def child(self, spawn_instruction, code: list[_tokenizer.token]):
+        executer = _executer(spawn_instruction, code)
+        executer.scope_str = self.scope_str
+        executer.owners = self.owners
+        executer.cwd: pathlib.Path = self.cwd
+        executer.global_cwd: pathlib.Path = self.global_cwd
+        executer.macros: dict[str, _Macro] = self.macros
+        executer.macro_run_counts: dict[str, int] = self.macro_run_counts
+        executer.vars: dict[str, _tokenizer.token] = self.vars
+        executer.global_vars: dict[str, _tokenizer.token] = self.global_vars
+        executer.schem_builder = self.schem_builder
+        return executer
 
     def execute(self):
         while True:
@@ -1036,6 +1048,7 @@ class _executer:
         self.allow_mlog = not self.check_for_proc()
         self.is_root = True
         self.schem_builder.root_exec = self
+        self.global_cwd: pathlib.Path = self.cwd
         for name, value in self.DEFAULT_GLOBALS.items():
             self.global_vars[f"global_{name}"] = value
 
@@ -1099,6 +1112,8 @@ class _executer:
             return self.vars[str(name)].with_scope(self.scope_str).at_token(name)
         elif name.type == "global_identifier" and str(name) in self.global_vars:
             return self.global_vars[str(name)].with_scope("").at_token(name)
+        elif name.type == "content" and (return_value := self.resolve_special(str(name))) is not None:
+            return self.convert_to_var(return_value)
         else:
             return name.with_scope(self.scope_str)
 
@@ -1119,6 +1134,11 @@ class _executer:
             return f'{{{", ".join([f"{str(k)}: {self.resolve_output(v)}" for k, v in self.resolve_var(token).value.items()])}}}'
         else:
             return str(self.resolve_var(token))
+
+    def resolve_special(self, name: str) -> any:
+        match name:
+            case "@cwd":
+                return str(self.cwd)
 
     def write_var(self, name: _tokenizer.token, value: _tokenizer.token):
         if name.type == "identifier":
