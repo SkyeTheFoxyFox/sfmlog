@@ -423,18 +423,10 @@ class _executer:
 
         def I_pset(inst, executer): # Sets a variable
             value = executer.resolve_var(inst[2])
-            if value.type in ["identifier", "global_identifier"]:
-                inst.tokens[0].value = "set"
-                executer.output_instruction(inst)
-            else:
-                executer.write_var(inst[1], value)
+            executer.write_var(inst[1], value)
 
         def I_pop(inst, executer): # Performs math operations
-            if executer.resolve_var(inst[3]).type in ["identifier", "global_identifier"] or executer.resolve_var(inst[4] if 4 in inst else executer.convert_to_var(None)).type in ["identifier", "global_identifier"]:
-                inst.tokens[0].value = "op"
-                executer.output_instruction(inst)
-            else:
-                executer.write_var(inst[2], executer.eval_math(inst[1], executer.resolve_var(inst[3]), executer.resolve_var(inst[4] if 4 in inst else executer.convert_to_var(None))))
+            executer.write_var(inst[2], executer.eval_math(inst[1], executer.resolve_var(inst[3]), executer.resolve_var(inst[4] if 4 in inst else executer.convert_to_var(None))))
 
         def I_strop(inst, executer): # Performs string operations
             str_op = inst[1]
