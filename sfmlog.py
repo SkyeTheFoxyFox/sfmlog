@@ -1131,6 +1131,10 @@ class _executer:
         match name:
             case "@cwd":
                 return str(self.cwd)
+            case "@ctime":
+                return float(time.time()*1000)
+            case "@ptime":
+                return float(time.process_time()*1000)
 
     def write_var(self, name: _tokenizer.token, value: _tokenizer.token):
         if name.type == "identifier":
