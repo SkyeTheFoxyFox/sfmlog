@@ -986,7 +986,6 @@ class _executer:
             self.exec_pointer += 1
         if self.allow_mlog and self.is_root and len(self.output) > 0 and self.schem_builder is not None:
             self.schem_builder.add_proc(self.schem_builder.Proc(_tokenizer.token_list_to_str(self.output), None, self.global_vars["global_PROCESSOR_TYPE"], None, None))
-            print(_tokenizer.token_list_to_str(self.output))
         if self.is_root:
             self.schem_builder.processor_type = self.global_vars["global_PROCESSOR_TYPE"]
             self.schem_builder.set_name(self.resolve_string(self.global_vars["global_SCHEMATIC_NAME"]))
