@@ -305,7 +305,7 @@ class _executer:
             else:
                 import_file = pathlib.Path(str(import_file.value))
             if not import_file.is_absolute():
-                if import_file.parent != '.' and str(import_file.parents[-2]) == "std":
+                if import_file.parent != '.' and len(import_file.parents) > 1 and str(import_file.parents[-2]) == "std":
                     import_file = pathlib.Path(__file__).resolve().parent / import_file
                 else:
                     import_file = executer.cwd / import_file
