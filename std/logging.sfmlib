@@ -1,0 +1,62 @@
+# A simple logging library
+
+pset $_STD_LOGGING_loggingLevel 1
+
+defmac SetLogging level
+    if equal level "debug"
+        pset $_STD_LOGGING_loggingLevel 0
+    elif equal level "info"
+        pset $_STD_LOGGING_loggingLevel 1
+    elif equal level "warning"
+        pset $_STD_LOGGING_loggingLevel 2
+    elif equal level "error"
+        pset $_STD_LOGGING_loggingLevel 3
+    elif equal level "none"
+        pset $_STD_LOGGING_loggingLevel 4
+    end
+end 
+
+defmac _STD_LOGGING_FormatTime outStr time
+    pop mod millis time 1000
+    pop floor millis millis
+    pop idiv seconds time 1000
+    pop idiv minutes seconds 60
+    pop mod seconds seconds 60
+    if lessThan millis 10
+        strop cat millis "00" millis
+    elif lessThan millis 100
+        strop cat millis "0" millis
+    end
+    if lessThan seconds 10
+        strop cat seconds "0" seconds
+    end
+    strop cat outStr minutes ":" seconds "." millis
+end
+
+defmac LogDebug msg
+    if lessThanEq $_STD_LOGGING_loggingLevel 0
+        mac _STD_LOGGING_FormatTime time @ptime
+        log "[" time "] DEBUG: " msg
+    end
+end
+
+defmac LogInfo msg
+    if lessThanEq $_STD_LOGGING_loggingLevel 1
+        mac _STD_LOGGING_FormatTime time @ptime
+        log "[" time "] INFO: " msg
+    end
+end
+
+defmac LogWarning msg
+    if lessThanEq $_STD_LOGGING_loggingLevel 2
+        mac _STD_LOGGING_FormatTime time @ptime
+        log "[" time "] WARNING: " msg
+    end
+end
+
+defmac LogError msg
+    if lessThanEq $_STD_LOGGING_loggingLevel 3
+        mac _STD_LOGGING_FormatTime time @ptime
+        log "[" time "] ERROR: " msg
+    end
+end

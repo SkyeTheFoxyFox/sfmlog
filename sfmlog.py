@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import sys, argparse, pathlib, re, pymsch, math, random, time, dill, json, io
 
 def _error(text: str, token, executer):
@@ -303,7 +305,10 @@ class _executer:
             else:
                 import_file = pathlib.Path(str(import_file.value))
             if not import_file.is_absolute():
-                import_file = executer.cwd / import_file
+                if import_file.parent != '.' and str(import_file.parents[-2]) == "std":
+                    import_file = pathlib.Path(__file__).resolve().parent / import_file
+                else:
+                    import_file = executer.cwd / import_file
             try:
                 with open(import_file, "r") as file:
                     import_code = file.read()
