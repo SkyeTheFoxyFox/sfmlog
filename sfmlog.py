@@ -100,7 +100,8 @@ class _tokenizer:
         "spop": [True],
         "if": [True],
         "while": [True],
-        "for": [True]
+        "for": [True],
+        "strop": [True]
     }
 
     LINK_BLOCKS = ["gate", "foundation", "wall", "container", "afflict", "heater", "conveyor", "duct", "press", "tower", "pad", "projector", "swarmer", "factory", "drill", "router", "door", "illuminator", "processor", "sorter", "spectre", "parallax", "cell", "electrolyzer", "display", "chamber", "mixer", "conduit", "distributor", "crucible", "message", "unloader", "refabricator", "switch", "bore", "bank", "accelerator", "disperse", "vault", "point", "nucleus", "panel", "node", "condenser", "smelter", "pump", "generator", "tank", "reactor", "cultivator", "malign", "synthesizer", "deconstructor", "meltdown", "centrifuge", "radar", "driver", "void", "junction", "diffuse", "pulverizer", "salvo", "bridge", "acropolis", "dome", "reconstructor", "separator", "citadel", "concentrator", "mender", "lancer", "source", "loader", "duo", "melter", "crusher", "fabricator", "redirector", "disassembler", "gigantic", "incinerator", "scorch", "battery", "tsunami", "arc", "compressor", "assembler", "smite", "module", "bastion", "segment", "constructor", "ripple", "furnace", "wave", "foreshadow", "link", "mine", "scathe", "canvas", "diode", "extractor", "fuse", "kiln", "sublimate", "scatter", "cyclone", "titan", "turret", "lustre", "thruster", "shard", "weaver", "huge", "breach", "hail"]
@@ -461,6 +462,9 @@ class _executer:
                         out_val = str_in[int(start.value):int(end.value)]
                     else:
                         out_val = str_in[int(start.value):]
+                case "split":
+                    split_str = executer.resolve_string(inst[4])
+                    out_val = str_in.split(split_str)
                 case "rematch":
                     pattern = executer.resolve_string(inst[4])
                     try:
@@ -610,8 +614,8 @@ class _executer:
                     try:
                         lst.pop(int(index.value))
                     except IndexError:
-                        _error("Index out of range", inst[4])
-                    executer.write_var(output_list, executer.convert_to_var(lst), executer)
+                        _error("Index out of range", inst[4], executer)
+                    executer.write_var(output_list, executer.convert_to_var(lst))
                 case "len": # Gets length
                     output = inst[2]
                     input_list = inst[3]
@@ -1011,8 +1015,10 @@ class _executer:
                 return None
             inst = self.lines[self.exec_pointer]
             if inst[0].value in start_word:
+                section.extend(inst.tokens)
                 level += 1
             elif inst[0].value == end_word and level > 0:
+                section.extend(inst.tokens)
                 level -= 1
             elif inst[0].value in split_word and level == 0:
                 sections.append((prev_line, section))
@@ -1049,7 +1055,7 @@ class _executer:
             case (int() | float() | bool()):
                 return _tokenizer.token("number", float(value))
             case str() as v if v == "":
-                return _tokenizer.token("string", value)
+                return _tokenizer.token("string", '""')
             case str() as v if v[0] == '"' and v[-1] == '"':
                 return _tokenizer.token("string", value)
                 #return _tokenizer.token("string", value.replace("\\\"", "\""))
