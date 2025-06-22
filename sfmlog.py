@@ -154,33 +154,35 @@ class _tokenizer:
 
     def tokenize(self, code: str, file: str) -> list[token]:
         tokens = []
-        regex = r"(?:(?: |\t)+)|(?:\n+$)|(\n)\n*|(?:#.*)(?:\n|$)|(\".+?\")(?:\s*?$| )|(.+?)(?:\s*?$| )"
+        line_regex = r"^[^#\n].+$\n?"
+        token_regex = r"#.*|(\".*?\"|[^ \n]+|\n)"
         prev_instruction = ""
         prev_token_type = "line_break"
         dist_from_prev_instruction = 0
-        for match in re.finditer(regex, code, flags=re.M):
-            if not all(x is None for x in match.groups()):
-                match_string = [x for x in match.groups() if x != None][0]
-
-                line = 0
-                column = 0
-                for index, value in enumerate(code):
-                    column += 1
-                    if index >= match.start():
-                        break
-                    if value == "\n":
-                        line += 1
-                        column = 0
+        for line_match in re.finditer(line_regex, code, flags=re.M):
+            for token_match in re.finditer(token_regex, line_match[0], flags=re.M):
+                match_string = token_match.groups()[0]
+                if match_string is not None:
+                    line = 0
+                    column = 0
+                    for index, value in enumerate(code):
+                        column += 1
+                        if index >= line_match.start() + token_match.start():
+                            break 
+                        if value == "\n":
+                            line += 1
+                            column = 0
     
-                token_type, token_value = self.identify_token(match_string, prev_token_type, prev_instruction, dist_from_prev_instruction, (line + 1, column))
-                dist_from_prev_instruction += 1
-                if token_type == "instruction":
-                    prev_instruction = match_string
-                    dist_from_prev_instruction = 0
-                if not (token_type == "line_break" and prev_token_type == "line_break"):
-                    tokens.append(self.token(token_type, token_value, line + 1, column, file))
-                prev_token_type = token_type
-        tokens.append(self.token("line_break", "\n", line + 1, column, file))
+                    token_type, token_value = self.identify_token(match_string, prev_token_type, prev_instruction, dist_from_prev_instruction, (line + 1, column))
+                    dist_from_prev_instruction += 1
+                    if token_type == "instruction":
+                        prev_instruction = match_string
+                        dist_from_prev_instruction = 0
+                    if not (token_type == "line_break" and prev_token_type == "line_break"):
+                        tokens.append(self.token(token_type, token_value, line + 1, column, file))
+                    prev_token_type = token_type
+        if tokens[-1].type != "line_break":
+            tokens.append(self.token("line_break", "\n", line + 1, column, file))
         return tokens
 
     def identify_token(self, string: str, prev_token_type: str, prev_instruction: str, dist_from_prev_instruction: int, pos: tuple[int, int]) -> tuple[str, str | float]:
