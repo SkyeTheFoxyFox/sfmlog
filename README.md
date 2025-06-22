@@ -2,6 +2,9 @@
 
 A mindustry logic (mlog) transpiler adding macros and a bunch of other preprocessor stuff.
 
+# Documentation
+Documentation can be found in the [wiki](https://github.com/SkyeTheFoxyFox/sfmlog/wiki)
+
 # Installation
 ## Requirements
 See [requirements.txt](requirements.txt)
