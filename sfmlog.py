@@ -548,7 +548,7 @@ class _executer:
                         value = executer.resolve_var(elem)
                         lst.append(value)
                     executer.write_var(output_list, executer.convert_to_var(lst))
-                case "set": # Sets an index value
+                case "copy": # Copies a list
                     output_list = inst[2]
                     input_list = inst[3]
                     if input_list.type in ["identifier", "global_identifier"]:
@@ -556,21 +556,29 @@ class _executer:
                         lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
                     else:
                         lst = []
-                    value = executer.resolve_var(inst[4])
-                    index = executer.resolve_var(inst[5])
+                    executer.write_var(output_list, executer.convert_to_var(lst))
+                case "set": # Sets an index value
+                    lst_var = inst[2]
+                    if lst_var.type in ["identifier", "global_identifier"]:
+                        var = executer.resolve_var(lst_var)
+                        lst = var.value if var.type == "list" else []
+                    else:
+                        lst = []
+                    value = executer.resolve_var(inst[3])
+                    index = executer.resolve_var(inst[4])
                     if index.type != "number":
-                        _error(f"Expected type 'number', got type '{index.type}'", inst[5], executer)
+                        _error(f"Expected type 'number', got type '{index.type}'", inst[4], executer)
                     try:
                         lst[int(index.value)] = value
                     except IndexError:
-                        _error("Index out of range", inst[5], executer)
-                    executer.write_var(output_list, executer.convert_to_var(lst))
+                        _error("Index out of range", inst[4], executer)
+                    executer.write_var(lst_var, executer.convert_to_var(lst))
                 case "get": # Gets an index value
                     output = inst[2]
                     input_list = inst[3]
                     if input_list.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_list)
-                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
+                        lst = var.value if var.type == "list" else []
                     else:
                         lst = []
                     index = executer.resolve_var(inst[4])
@@ -581,46 +589,43 @@ class _executer:
                     except IndexError:
                         _error("Index out of range", inst[4], executer)
                 case "append": # Appends value to the end
-                    output_list = inst[2]
-                    input_list = inst[3]
-                    if input_list.type in ["identifier", "global_identifier"]:
-                        var = executer.resolve_var(input_list)
-                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
+                    lst_var = inst[2]
+                    if lst_var.type in ["identifier", "global_identifier"]:
+                        var = executer.resolve_var(lst_var)
+                        lst = var.value if var.type == "list" else []
                     else:
                         lst = []
-                    value = executer.resolve_var(inst[4])
+                    value = executer.resolve_var(inst[3])
                     lst.append(value)
-                    executer.write_var(output_list, executer.convert_to_var(lst))
+                    executer.write_var(lst_var, executer.convert_to_var(lst))
                 case "insert": # Inserts value at an index
-                    output_list = inst[2]
-                    input_list = inst[3]
-                    if input_list.type in ["identifier", "global_identifier"]:
-                        var = executer.resolve_var(input_list)
-                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
+                    lst_var = inst[2]
+                    if lst_var.type in ["identifier", "global_identifier"]:
+                        var = executer.resolve_var(lst_var)
+                        lst = var.value if var.type == "list" else []
                     else:
                         lst = []
-                    value = executer.resolve_var(inst[4])
-                    index = executer.resolve_var(inst[5])
-                    if index.type != "number":
-                        _error(f"Expected type 'number', got type '{index.type}'", inst[5], executer)
-                    lst.insert(int(index.value), value)
-                    executer.write_var(output_list, executer.convert_to_var(lst))
-                case "del": # Removes value from an index
-                    output_list = inst[2]
-                    input_list = inst[3]
-                    if input_list.type in ["identifier", "global_identifier"]:
-                        var = executer.resolve_var(input_list)
-                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
-                    else:
-                        lst = []
+                    value = executer.resolve_var(inst[3])
                     index = executer.resolve_var(inst[4])
                     if index.type != "number":
                         _error(f"Expected type 'number', got type '{index.type}'", inst[4], executer)
+                    lst.insert(int(index.value), value)
+                    executer.write_var(lst_var, executer.convert_to_var(lst))
+                case "del": # Removes value from an index
+                    lst_var = inst[2]
+                    if lst_var.type in ["identifier", "global_identifier"]:
+                        var = executer.resolve_var(lst_var)
+                        lst = var.value if var.type == "list" else []
+                    else:
+                        lst = []
+                    index = executer.resolve_var(inst[3])
+                    if index.type != "number":
+                        _error(f"Expected type 'number', got type '{index.type}'", inst[3], executer)
                     try:
                         lst.pop(int(index.value))
                     except IndexError:
-                        _error("Index out of range", inst[4], executer)
-                    executer.write_var(output_list, executer.convert_to_var(lst))
+                        _error("Index out of range", inst[3], executer)
+                    executer.write_var(lst_var, executer.convert_to_var(lst))
                 case "len": # Gets length
                     output = inst[2]
                     input_list = inst[3]
@@ -634,7 +639,7 @@ class _executer:
                     input_elem = executer.resolve_var(inst[4])
                     if input_list.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_list)
-                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
+                        lst = var.value if var.type == "list" else []
                     else:
                         lst = []
                     if executer.resolve_var(input_list).type == "list":
@@ -652,7 +657,7 @@ class _executer:
                     input_elem = executer.resolve_var(inst[4])
                     if input_list.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_list)
-                        lst = dill.loads(dill.dumps(var.value)) if var.type == "list" else []
+                        lst = var.value if var.type == "list" else []
                     else:
                         lst = []
                     if executer.resolve_var(input_list).type == "list":
@@ -683,7 +688,7 @@ class _executer:
                             _error(f"Unable to write type '{key.type}' to table key", elem1, executer)
                         tbl[executer.convert_var_to_py(key)] = value
                     executer.write_var(output_table, executer.convert_to_var(tbl))
-                case "set": # Sets a key's value in a table
+                case "copy": # Copies a table
                     output_table = inst[2]
                     input_table = inst[3]
                     if input_table.type in ["identifier", "global_identifier"]:
@@ -691,18 +696,26 @@ class _executer:
                         tbl = dill.loads(dill.dumps(var.value)) if var.type == "table" else {}
                     else:
                         tbl = {}
-                    key = executer.resolve_var(inst[4])
-                    value = executer.resolve_var(inst[5])
-                    if key.type in ["list", "table"]:
-                        _error(f"Unable to write type '{key.type}' to table key", inst[4], executer)
-                    tbl[executer.convert_var_to_py(key)] = value
                     executer.write_var(output_table, executer.convert_to_var(tbl))
+                case "set": # Sets a key's value in a table
+                    tbl_var = inst[2]
+                    if tbl_var.type in ["identifier", "global_identifier"]:
+                        var = executer.resolve_var(tbl_var)
+                        tbl = var.value if var.type == "table" else {}
+                    else:
+                        tbl = {}
+                    key = executer.resolve_var(inst[3])
+                    value = executer.resolve_var(inst[4])
+                    if key.type in ["list", "table"]:
+                        _error(f"Unable to write type '{key.type}' to table key", inst[3], executer)
+                    tbl[executer.convert_var_to_py(key)] = value
+                    executer.write_var(tbl_var, executer.convert_to_var(tbl))
                 case "get": # Gets a key's value in a table
                     output = inst[2]
                     input_table = inst[3]
                     if input_table.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_table)
-                        tbl = dill.loads(dill.dumps(var.value)) if var.type == "table" else {}
+                        tbl = var.value if var.type == "table" else {}
                     else:
                         tbl = {}
                     key = executer.resolve_var(inst[4])
@@ -711,25 +724,24 @@ class _executer:
                     except KeyError:
                         _error(f"Key '{key.value}' not found", inst[4], executer)
                 case "del": # Removes a key
-                    output_table = inst[2]
-                    input_table = inst[3]
-                    if input_table.type in ["identifier", "global_identifier"]:
-                        var = executer.resolve_var(input_table)
-                        tbl = dill.loads(dill.dumps(var.value)) if var.type == "table" else {}
+                    tbl_var = inst[2]
+                    if tbl_var.type in ["identifier", "global_identifier"]:
+                        var = executer.resolve_var(tbl_var)
+                        tbl = var.value if var.type == "table" else {}
                     else:
                         tbl = {}
-                    key = executer.resolve_var(inst[4])
+                    key = executer.resolve_var(inst[3])
                     try:
                         tbl.pop(key.value)
                     except KeyError:
-                        _error(f"Key '{key.value}' not found", inst[4], executer)
-                    executer.write_var(output_table, executer.convert_to_var(tbl))
+                        _error(f"Key '{key.value}' not found", inst[3], executer)
+                    executer.write_var(tbl_var, executer.convert_to_var(tbl))
                 case "in":
                     output = inst[2]
                     input_table = inst[3]
                     if input_table.type in ["identifier", "global_identifier"]:
                         var = executer.resolve_var(input_table)
-                        tbl = dill.loads(dill.dumps(var.value)) if var.type == "table" else {}
+                        tbl = var.value if var.type == "table" else {}
                     else:
                         tbl = {}
                     key = executer.resolve_var(inst[4])
