@@ -1,6 +1,9 @@
 # A simple logging library
 
-pset $_STD_LOGGING_loggingLevel 1
+type varType $_STD_LOGGING_loggingLevel
+if equal varType "global_identifier"
+    pset $_STD_LOGGING_loggingLevel 1
+end
 
 defmac SetLogging level
     if equal level "debug"
