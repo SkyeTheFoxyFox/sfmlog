@@ -1,6 +1,18 @@
 #!/usr/bin/python3
 
-import sys, argparse, pathlib, re, pymsch, math, random, time, dill, json, io
+from __future__ import annotations
+
+import sys
+import argparse
+import pathlib
+import re
+import pymsch
+import math
+import random
+import time
+import dill
+import json
+import io
 
 def _error(text: str, token, executer):
     print(f"Error: {text}\nTraceback (most recent call last):")
@@ -135,7 +147,7 @@ class _tokenizer:
                 return str(self.value)
 
         def with_scope(self, scope: str):
-            if self.scope == None:
+            if self.scope is None:
                 return _tokenizer.token(self.type, self.value, self.line, self.column, self.file, scope=scope, exportable=self.exportable)
             else:
                 return self
@@ -150,12 +162,12 @@ class _tokenizer:
                 return self.value
 
     def __init__(self, code: str, file: pathlib.Path):
-        self.tokens: list[token] = self.tokenize(code, file)
+        self.tokens: list[_tokenizer.token] = self.tokenize(code, file)
 
     def tokenize(self, code: str, file: str) -> list[token]:
         tokens = []
-        line_regex = r"^[^#\n].+$\n?"
-        token_regex = r"#.*|(\".*?\"|[^ \n]+|\n)"
+        line_regex = r"^[^#\n].+$[\n;]?"
+        token_regex = r"#.*|(\".*?\"|[^ \n;]+|[\n;])"
         prev_instruction = ""
         prev_token_type = "line_break"
         dist_from_prev_instruction = 0
@@ -168,11 +180,11 @@ class _tokenizer:
                     for index, value in enumerate(code):
                         column += 1
                         if index >= line_match.start() + token_match.start():
-                            break 
+                            break
                         if value == "\n":
                             line += 1
                             column = 0
-    
+
                     token_type, token_value = self.identify_token(match_string, prev_token_type, prev_instruction, dist_from_prev_instruction, (line + 1, column))
                     dist_from_prev_instruction += 1
                     if token_type == "instruction":
@@ -186,30 +198,30 @@ class _tokenizer:
         return tokens
 
     def identify_token(self, string: str, prev_token_type: str, prev_instruction: str, dist_from_prev_instruction: int, pos: tuple[int, int]) -> tuple[str, str | float]:
-        if(string == '\n'):
+        if string in "\n;":
             return ("line_break", "\n")
 
-        if(string[0] == '"' and string[-1] == '"'):
+        if string[0] == '"' and string[-1] == '"' :
             return ("string", string)
 
-        if(string[0] == '"' or string[-1] == '"'):
+        if string[0] == '"' or string[-1] == '"':
             print(f"ERROR at ({pos[0]},{pos[1]}): String not closed")
             sys.exit(2)
 
-        if(string[0] == '%'):
+        if string[0] == '%':
             try:
                 return ("color", _Color.from_hex(string[1:]))
             except ValueError:
                 print(f"ERROR at ({pos[0]},{pos[1]}): Invalid color")
                 sys.exit(2)
 
-        if(re.search(r"^0x[0-9a-fA-F]*$", string)):
+        if re.search(r"^0x[0-9a-fA-F]*$", string):
             return ("number", float(int(string[2:], 16)))
 
-        if(re.search(r"^0b[01]*$", string)):
+        if re.search(r"^0b[01]*$", string):
             return ("number", float(int(string[2:], 2)))
 
-        if(re.search(r"^-?[0-9]*(\.[0-9]*)?$", string)):
+        if re.search(r"^-?[0-9]*(\.[0-9]*)?$", string):
             return ("number", float(string))
 
         if string == "true":
@@ -218,16 +230,16 @@ class _tokenizer:
         if string == "false":
             return ("number", 0.0)
 
-        if(re.search(r"^-?[0-9]*(\.[0-9]*)?e-?[0-9]*(\.[0-9]*)?$", string)):
+        if re.search(r"^-?[0-9]*(\.[0-9]*)?e-?[0-9]*(\.[0-9]*)?$", string):
             return ("number", float(string))
 
-        if(string[0] == '@'):
+        if string[0] == '@':
             return ("content", string)
 
-        if((string.rstrip("1234567890") in self.LINK_BLOCKS) and (string != string.rstrip("1234567890"))):
+        if (string.rstrip("1234567890") in self.LINK_BLOCKS) and (string != string.rstrip("1234567890")):
             return ("link_literal", string)
 
-        if(prev_token_type == "line_break"):
+        if prev_token_type == "line_break":
             if(string[-1] == ':'):
                 if string[0] == "$":
                     return ("global_label", string[1:])
@@ -236,14 +248,14 @@ class _tokenizer:
             else:
                 return ("instruction", string)
 
-        if(prev_instruction in self.SUB_INSTRUCTION_MAP):
+        if prev_instruction in self.SUB_INSTRUCTION_MAP:
             if(dist_from_prev_instruction < len(self.SUB_INSTRUCTION_MAP[prev_instruction]) and self.SUB_INSTRUCTION_MAP[prev_instruction][dist_from_prev_instruction]):
                 return ("sub_instruction", string)
 
-        if(string[0] == '$'):
+        if string[0] == '$':
             return ("global_identifier", string[1:])
 
-        if(string  == "null"):
+        if string  == "null":
             return ("null", string)
 
         return ("identifier", string)
@@ -270,7 +282,7 @@ class _executer:
     class Instruction:
         def __init__(self, keyword, exec_func):
             self.keyword: str = keyword
-            self.exec_func: Callable = exec_func
+            self.exec_func: callable = exec_func
 
     class Instructions:
         BLOCK_INSTRUCTIONS = ["defmac", "proc", "if", "while", "for", "discard"]
@@ -339,7 +351,7 @@ class _executer:
                     _error("Expected numeric value", inst[4], executer)
                 block_pos = (int(executer.resolve_var(inst[3]).value), int(executer.resolve_var(inst[4]).value))
             if 5 in inst:
-                if type(executer.resolve_var(inst[5]).value) != float:
+                if not isinstance(executer.resolve_var(inst[5]).value, float):
                     _error("Expected numeric value", inst[5], executer)
                 block_rot = int(executer.resolve_var(inst[5]).value)
             if executer.schem_builder is not None:
@@ -449,7 +461,7 @@ class _executer:
                 case "num":
                     try:
                         out_val = float(str_in)
-                    except:
+                    except Exception:
                         _error("Unable to convert to number", inst[3], executer)
                 case "charat":
                     if executer.resolve_var(inst[4]).type != "number":
@@ -807,12 +819,12 @@ class _executer:
                     if count.type != "number":
                         _error(f"Expected type 'number', got type '{count.type}'", inst[4], executer)
                     if count.value > 32 or count.value <= 0:
-                        _error(f"Byte count should be between 1 and 32", inst[4], executer)
+                        _error("Byte count should be between 1 and 32", inst[4], executer)
                     if endianness.type != "string":
                         print(endianness.type)
                         _error(f"Expected type 'string', got type '{endianness.type}'", inst[5], executer)
                     if endianness.value not in ['"big"', '"little"']:
-                        _error(f"Invalid endianness, should be 'big' or 'little'", inst[5], executer)
+                        _error("Invalid endianness, should be 'big' or 'little'", inst[5], executer)
                     executer.write_var(output_var, executer.convert_to_var(int.from_bytes(file.value.read(int(count.value)), byteorder=executer.resolve_string(endianness))))
         
         def I_if(inst, executer): # Runs code depending on a condition
@@ -868,7 +880,7 @@ class _executer:
                     for_iter = tbl.value.items()
 
             for i in for_iter:
-                if type(i) == tuple:
+                if isinstance(i, tuple):
                     for index, value in enumerate(i):
                         executer.write_var(inst[2+index], executer.convert_to_var(value))
                 else:
@@ -940,7 +952,7 @@ class _executer:
             return len(self.tokens)
 
     def __init__(self, spawn_instruction, code: list[_tokenizer.token]):
-        self.instructions: list[Instruction] = []
+        self.instructions: list[_executer.Instruction] = []
         self.Instructions.init_instructions(self)
         self.owners = []
         self.spawn_instruction = spawn_instruction
