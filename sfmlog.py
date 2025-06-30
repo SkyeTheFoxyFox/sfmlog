@@ -73,6 +73,13 @@ class _Macro:
     def __str__(self):
         return f"macro({self.name})"
 
+class _Function:
+    def __init__(self, name: str, code: list[_tokenizer.token], args: list[tuple[_tokenizer.token, str]], cwd: pathlib.Path):
+        self.name: str = name
+        self.code: list[_tokenizer.token] = code
+        self.args: list[tuple[_tokenizer.token, str]] = args
+        self.cwd: pathlib.Path = cwd
+
 class SFMlog:
     def __init__(self):
         pass
@@ -294,6 +301,8 @@ class _executer:
             executer.init_instruction("proc", inst.I_proc)
             executer.init_instruction("defmac", inst.I_defmac)
             executer.init_instruction("mac", inst.I_mac)
+            executer.init_instruction("deffun", inst.I_deffun)
+            executer.init_instruction("fun", inst.I_fun)
             executer.init_instruction("getmac", inst.I_getmac)
             executer.init_instruction("setmac", inst.I_setmac)
             executer.init_instruction("type", inst.I_type)
@@ -367,6 +376,8 @@ class _executer:
             proc_executer.scope_str = "_"
             proc_executer.vars = {}
             proc_executer.macro_run_counts = {}
+            proc_executer.called_functions = []
+            proc_executer.is_processor = True
             proc_executer.execute()
             if 4 in inst:
                 proc_type = executer.resolve_var(inst[2])
@@ -406,7 +417,7 @@ class _executer:
                 if mac.name not in executer.macro_run_counts:
                     executer.macro_run_counts[mac.name] = 0
                 mac_executer = executer.child(inst, mac.code, )
-                mac_executer.scope_str = f"_{mac.name}_{executer.macro_run_counts[mac.name]}_"
+                mac_executer.scope_str = f"m_{mac.name}_{executer.macro_run_counts[mac.name]}_"
                 mac_executer.owners = executer.owners + [executer.spawn_instruction]
                 mac_executer.cwd = mac.cwd
                 mac_executer.vars = {}
@@ -425,6 +436,47 @@ class _executer:
             else:
                 _error(f"Unknown macro '{inst[1].value}'", inst[1], executer)
             
+        def I_deffun(inst, executer): # Defines a function
+            fun_code = executer.read_till("end", _executer.Instructions.BLOCK_INSTRUCTIONS)
+            if fun_code is None:
+                _error("'end' expected, but not found", inst[0], executer)
+            if inst[1].type != "identifier":
+                _error("Invalid name for function", inst[1], executer)
+            if inst[1].value in executer.functions:
+                _error(f"Function '{inst[1].value}' is already defined", inst[1], executer)
+            fun_args = []
+            for arg_token in inst.tokens[2:-1]:
+                out_token = arg_token.with_scope(f"f_{inst[1].value}_")
+                if arg_token.type != "identifier":
+                    _error("Invalid name for function argument", arg_token, executer)                
+                if arg_token.value[0] == ">":
+                    out_token.value = out_token.value[1:]
+                    arg_direction = "in"
+                elif arg_token.value[0:2] == "<>":
+                    out_token.value = out_token.value[2:]
+                    arg_direction = "inout" 
+                elif arg_token.value[0] == "<":
+                    out_token.value = out_token.value[1:]
+                    arg_direction = "out"
+                else:
+                    arg_direction = "in"
+                fun_args.append((out_token, arg_direction))
+            executer.functions[inst[1].value] = _Function(inst[1].value, fun_code, fun_args, executer.cwd)
+
+        def I_fun(inst, executer): # Calls a function
+            if inst[1].value in executer.functions:
+                func = executer.functions[inst[1].value]
+                if func.name not in executer.called_functions:
+                    executer.called_functions.append(func.name)
+                for index, arg in enumerate(func.args):
+                    if arg[1] in ["in", "inout"] and inst[index+2].value != "_":
+                        executer.output.extend([_tokenizer.token("instruction", "set"), arg[0], inst[2+index].with_scope(executer.scope_str), _tokenizer.token("line_break", "\n")])
+                executer.output.extend([_tokenizer.token("instruction", "op"), _tokenizer.token("sub_instruction", "add"), _tokenizer.token("identifier",f"{func.name}_return").with_scope("function_"), _tokenizer.token("content", "@counter"), executer.convert_to_var(1), _tokenizer.token("line_break", "\n")])
+                executer.output.extend([_tokenizer.token("instruction", "jump"), _tokenizer.token("identifier", func.name).with_scope("function_"), _tokenizer.token("sub_instruction", "always"), _tokenizer.token("line_break", "\n")])
+                for index, arg in enumerate(func.args):
+                    if arg[1] in ["out", "inout"] and inst[index+2].type in ["identifier", "global_identifier"] and inst[index+2].value != "_":
+                        executer.output.extend([_tokenizer.token("instruction", "set"), inst[2+index].with_scope(executer.scope_str), arg[0], _tokenizer.token("line_break", "\n")])
+
         def I_getmac(inst, executer): # Writes a macro to a variable
             if inst[2].value not in executer.macros:
                 _error(f"Unknown macro '{inst[2].value}'", inst[2], executer)
@@ -895,6 +947,7 @@ class _executer:
                 _error("'end' expected, but not found", inst[0], executer)
             block_executer = executer.child(executer.spawn_instruction, code_block)
             block_executer.macros = executer.macros.copy()
+            block_executer.functions = executer.functions.copy()
             block_executer.vars = executer.vars.copy()
             block_executer.global_vars = executer.global_vars.copy()
             block_executer.macro_run_counts = {}
@@ -964,11 +1017,14 @@ class _executer:
         self.scope_str = "_"
         self.macros: dict[str, _Macro] = {}
         self.macro_run_counts: dict[str, int] = {}
+        self.functions: dict[str, _Function] = {}
+        self.called_functions: list[str] = []
         self.vars: dict[str, _tokenizer.token] = {}
         self.global_vars: dict[str, _tokenizer.token] = {}
         self.allow_mlog = True
         self.is_root = False
         self.schem_builder = None
+        self.is_processor = False
 
         self.exec_pointer = 0
 
@@ -979,6 +1035,8 @@ class _executer:
         executer.cwd: pathlib.Path = self.cwd
         executer.global_cwd: pathlib.Path = self.global_cwd
         executer.macros: dict[str, _Macro] = self.macros
+        executer.functions: dict[str, _Function] = self.functions
+        executer.called_functions: list[str] = self.called_functions
         executer.macro_run_counts: dict[str, int] = self.macro_run_counts
         executer.vars: dict[str, _tokenizer.token] = self.vars
         executer.global_vars: dict[str, _tokenizer.token] = self.global_vars
@@ -996,20 +1054,13 @@ class _executer:
             if len(self.output) > 0 and not self.allow_mlog:
                 _error("Mlog instructions not allowed outside a 'proc' statement", inst[0], self)
             self.exec_pointer += 1
-        if self.allow_mlog and self.is_root and len(self.output) > 0 and self.schem_builder is not None:
-            self.schem_builder.add_proc(self.schem_builder.Proc(_tokenizer.token_list_to_str(self.output), None, self.global_vars["global_PROCESSOR_TYPE"], None, None))
+        if self.is_processor:
+            self.expand_functions()
+            print(_tokenizer.token_list_to_str(self.output))
         if self.is_root:
             self.schem_builder.processor_type = self.global_vars["global_PROCESSOR_TYPE"]
             self.schem_builder.set_name(self.resolve_string(self.global_vars["global_SCHEMATIC_NAME"]))
             self.schem_builder.set_desc(self.resolve_string(self.global_vars["global_SCHEMATIC_DESCRIPTION"]))
-
-    def check_for_proc(self) -> bool:
-        for inst in self.read_lines():
-            if inst[0].value == "proc":
-                break
-        else:
-            return False
-        return True
 
     def read_till(self, end_word: str, start_word: list[str]) -> list[_tokenizer.token] | None: #None if eof, token if unexpected end
         lines = self.read_lines_till(end_word, start_word)
@@ -1073,7 +1124,7 @@ class _executer:
         return lines
 
     def as_root_level(self):
-        self.allow_mlog = not self.check_for_proc()
+        self.allow_mlog = False
         self.is_root = True
         self.schem_builder.root_exec = self
         self.global_cwd: pathlib.Path = self.cwd
@@ -1353,6 +1404,19 @@ class _executer:
                 self.output.append(self.resolve_var(token))
             else:
                 _error(f"Unable to output type '{self.resolve_var(token).type}' to mlog", token, self)
+
+    def expand_functions(self):
+        if len(self.called_functions) > 0:
+            self.output.extend([_tokenizer.token("instruction", "end"), _tokenizer.token("line_break", "\n")])
+            for func_name in self.called_functions:
+                func = self.functions[func_name]
+                self.output.extend([_tokenizer.token("label", func.name+":").with_scope("function_") ,_tokenizer.token("line_break", "\n")])
+                func_executer = self.child(self.spawn_instruction, func.code)
+                func_executer.scope_str = f"f_{func.name}_"
+                func_executer.execute()
+                self.output.extend(func_executer.output)
+                self.output.extend([_tokenizer.token("instruction", "set"), _tokenizer.token("content", "@counter"), _tokenizer.token("identifier",f"{func.name}_return").with_scope("function_"), _tokenizer.token("line_break", "\n")])
+
 
 class _schem_builder:
     class Proc:
