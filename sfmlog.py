@@ -292,7 +292,7 @@ class _executer:
             self.exec_func: callable = exec_func
 
     class Instructions:
-        BLOCK_INSTRUCTIONS = ["defmac", "proc", "if", "while", "for", "discard"]
+        BLOCK_INSTRUCTIONS = ["defmac", "deffun", "proc", "if", "while", "for", "discard"]
 
         def init_instructions(executer):
             inst = _executer.Instructions
@@ -1010,7 +1010,7 @@ class _executer:
         self.owners = []
         self.spawn_instruction = spawn_instruction
         self.code: list[_tokenizer.token] = code
-        self.lines = self.read_lines()
+        self.lines = self.read_lines(self.code)
         self.output: list[_tokenizer.token] = []
         self.cwd: pathlib.Path = None
         self.global_cwd: pathlib.Path = None
@@ -1111,10 +1111,10 @@ class _executer:
             else:
                 section.extend(inst.tokens)
 
-    def read_lines(self) -> list[list[_tokenizer.token]]:
+    def read_lines(self, code) -> list[list[_tokenizer.token]]:
         lines = []
         line = []
-        for token in self.code:
+        for token in code:
             if token.type == "line_break":
                 line.append(token)
                 lines.append(self.InstructionLine(line, self))
@@ -1416,7 +1416,6 @@ class _executer:
                 func_executer.execute()
                 self.output.extend(func_executer.output)
                 self.output.extend([_tokenizer.token("instruction", "set"), _tokenizer.token("content", "@counter"), _tokenizer.token("identifier",f"{func.name}_return").with_scope("function_"), _tokenizer.token("line_break", "\n")])
-
 
 class _schem_builder:
     class Proc:
