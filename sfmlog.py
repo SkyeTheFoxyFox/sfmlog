@@ -472,7 +472,7 @@ class _executer:
                     if arg[1] in ["in", "inout"] and inst[index+2].value != "_":
                         executer.output.extend([_tokenizer.token("instruction", "set"), arg[0], inst[2+index].with_scope(executer.scope_str), _tokenizer.token("line_break", "\n")])
                 executer.output.extend([_tokenizer.token("instruction", "op"), _tokenizer.token("sub_instruction", "add"), _tokenizer.token("identifier",f"{func.name}_return").with_scope("function_"), _tokenizer.token("content", "@counter"), executer.convert_to_var(1), _tokenizer.token("line_break", "\n")])
-                executer.output.extend([_tokenizer.token("instruction", "jump"), _tokenizer.token("identifier", func.name).with_scope("function_"), _tokenizer.token("sub_instruction", "always"), _tokenizer.token("line_break", "\n")])
+                executer.output.extend([_tokenizer.token("instruction", "jump").at_token(inst[0]), _tokenizer.token("identifier", func.name).with_scope("function_"), _tokenizer.token("sub_instruction", "always"), _tokenizer.token("line_break", "\n")])
                 for index, arg in enumerate(func.args):
                     if arg[1] in ["out", "inout"] and inst[index+2].type in ["identifier", "global_identifier"] and inst[index+2].value != "_":
                         executer.output.extend([_tokenizer.token("instruction", "set"), inst[2+index].with_scope(executer.scope_str), arg[0], _tokenizer.token("line_break", "\n")])
@@ -1056,7 +1056,7 @@ class _executer:
             self.exec_pointer += 1
         if self.is_processor:
             self.expand_functions()
-            print(_tokenizer.token_list_to_str(self.output))
+            self.check_func_recursion()
         if self.is_root:
             self.schem_builder.processor_type = self.global_vars["global_PROCESSOR_TYPE"]
             self.schem_builder.set_name(self.resolve_string(self.global_vars["global_SCHEMATIC_NAME"]))
@@ -1416,6 +1416,41 @@ class _executer:
                 func_executer.execute()
                 self.output.extend(func_executer.output)
                 self.output.extend([_tokenizer.token("instruction", "set"), _tokenizer.token("content", "@counter"), _tokenizer.token("identifier",f"{func.name}_return").with_scope("function_"), _tokenizer.token("line_break", "\n")])
+
+    def check_func_recursion(self): # I don't like this function :3
+        lines = self.read_lines(self.output)
+        functions = {}
+        func_name = None
+        in_funcdef = False
+
+        for inst in lines:
+            if inst[0].type == "label" and inst[0].scope == "function_":
+                in_funcdef = True
+                func_name = inst[0].value[:-1]
+                functions[func_name] = []
+            elif in_funcdef and inst[0].type == "instruction" and inst[0].value == "set" and inst[2].type == "identifier" and inst[2].scope == "function_":
+                in_funcdef = False
+            elif in_funcdef and inst[0].type == "instruction" and inst[0].value == "jump" and inst[1].type == "identifier" and inst[1].scope == "function_":
+                functions[func_name].append(inst[1].value)
+        for inst in lines:
+            if inst[0].type == "label" and inst[0].scope == "function_":
+                in_funcdef = True
+                func_name = inst[0].value[:-1]
+            elif in_funcdef and inst[0].type == "instruction" and inst[0].value == "set" and inst[2].type == "identifier" and inst[2].scope == "function_":
+                in_funcdef = False
+            elif in_funcdef and inst[0].type == "instruction" and inst[0].value == "jump" and inst[1].type == "identifier" and inst[1].scope == "function_":
+                checked_funcs = []
+                funcs_to_check = [inst[1].value]
+                while len(funcs_to_check) > 0:
+                    funcs_to_check_copy = funcs_to_check.copy()
+                    funcs_to_check = []
+                    for func in funcs_to_check_copy:
+                        checked_funcs.append(func)
+                        if func in functions and func_name in functions[func]:
+                            _error("Function recursion not allowed", inst[0], self)
+                        for new_func in functions[func]:
+                            if new_func not in checked_funcs and new_func not in funcs_to_check and new_func not in funcs_to_check_copy:
+                                funcs_to_check.append(new_func)
 
 class _schem_builder:
     class Proc:
