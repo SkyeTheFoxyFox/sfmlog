@@ -249,7 +249,7 @@ class _tokenizer:
             return ("content", string)
 
         if (string.rstrip("1234567890") in self.LINK_BLOCKS) and (string != string.rstrip("1234567890")):
-            return ("link_literal", string)
+            return ("block", string)
 
         if prev_token_type == "line_break":
             if(string[-1] == ':'):
