@@ -7,6 +7,7 @@ import argparse
 import pathlib
 import re
 import pymsch
+import pyperclip
 import math
 import random
 import time
@@ -84,17 +85,21 @@ class SFMlog:
     def __init__(self):
         pass
 
-    def transpile(self, code: str, file: pathlib.Path) -> str:
+    def transpile(self, code: str, file: pathlib.Path, as_text) -> pymsch.Schematic|str:
         tokenizer = _tokenizer(code, file)
         schem_builder = _schem_builder()
         executer = _executer(None, tokenizer.tokens)
+        executer.as_text = as_text
         executer.cwd = file.parent
         executer.global_cwd = file.parent
         executer.schem_builder = schem_builder
         executer.as_root_level()
         executer.execute()
-        schem_builder.make_schem()
-        return schem_builder.schem
+        if not as_text:
+            schem_builder.make_schem()
+            return schem_builder.schem
+        else:
+            return _tokenizer.token_list_to_str(executer.output)
 
 class _tokenizer:
     SUB_INSTRUCTION_MAP = {
@@ -287,9 +292,10 @@ class _executer:
     }
 
     class Instruction:
-        def __init__(self, keyword, exec_func):
+        def __init__(self, keyword, exec_func, not_text=False):
             self.keyword: str = keyword
             self.exec_func: callable = exec_func
+            self.not_text = not_text
 
     class Instructions:
         BLOCK_INSTRUCTIONS = ["defmac", "deffun", "proc", "if", "while", "for", "discard"]
@@ -297,8 +303,8 @@ class _executer:
         def init_instructions(executer):
             inst = _executer.Instructions
             executer.init_instruction("import", inst.I_import)
-            executer.init_instruction("block", inst.I_block)
-            executer.init_instruction("proc", inst.I_proc)
+            executer.init_instruction("block", inst.I_block, not_text=True)
+            executer.init_instruction("proc", inst.I_proc, not_text=True)
             executer.init_instruction("defmac", inst.I_defmac)
             executer.init_instruction("mac", inst.I_mac)
             executer.init_instruction("deffun", inst.I_deffun)
@@ -470,12 +476,12 @@ class _executer:
                     executer.called_functions.append(func.name)
                 for index, arg in enumerate(func.args):
                     if arg[1] in ["in", "inout"] and inst[index+2].value != "_":
-                        executer.output.extend([_tokenizer.token("instruction", "set"), arg[0], inst[2+index].with_scope(executer.scope_str), _tokenizer.token("line_break", "\n")])
+                        executer.output.extend([_tokenizer.token("instruction", "set"), arg[0], executer.resolve_var(inst[2+index]).with_scope(executer.scope_str), _tokenizer.token("line_break", "\n")])
                 executer.output.extend([_tokenizer.token("instruction", "op"), _tokenizer.token("sub_instruction", "add"), _tokenizer.token("identifier",f"{func.name}_return").with_scope("function_"), _tokenizer.token("content", "@counter"), executer.convert_to_var(1), _tokenizer.token("line_break", "\n")])
                 executer.output.extend([_tokenizer.token("instruction", "jump").at_token(inst[0]), _tokenizer.token("identifier", func.name).with_scope("function_"), _tokenizer.token("sub_instruction", "always"), _tokenizer.token("line_break", "\n")])
                 for index, arg in enumerate(func.args):
                     if arg[1] in ["out", "inout"] and inst[index+2].type in ["identifier", "global_identifier"] and inst[index+2].value != "_":
-                        executer.output.extend([_tokenizer.token("instruction", "set"), inst[2+index].with_scope(executer.scope_str), arg[0], _tokenizer.token("line_break", "\n")])
+                        executer.output.extend([_tokenizer.token("instruction", "set"), executer.resolve_var(inst[2+index]).with_scope(executer.scope_str), arg[0], _tokenizer.token("line_break", "\n")])
 
         def I_getmac(inst, executer): # Writes a macro to a variable
             if inst[2].value not in executer.macros:
@@ -1025,6 +1031,7 @@ class _executer:
         self.is_root = False
         self.schem_builder = None
         self.is_processor = False
+        self.as_text = False
 
         self.exec_pointer = 0
 
@@ -1041,6 +1048,7 @@ class _executer:
         executer.vars: dict[str, _tokenizer.token] = self.vars
         executer.global_vars: dict[str, _tokenizer.token] = self.global_vars
         executer.schem_builder = self.schem_builder
+        executer.as_text = self.as_text
         return executer
 
     def execute(self):
@@ -1054,7 +1062,7 @@ class _executer:
             if len(self.output) > 0 and not self.allow_mlog:
                 _error("Mlog instructions not allowed outside a 'proc' statement", inst[0], self)
             self.exec_pointer += 1
-        if self.is_processor:
+        if self.is_processor or self.is_root and self.as_text:
             self.expand_functions()
             self.check_func_recursion()
         if self.is_root:
@@ -1124,7 +1132,7 @@ class _executer:
         return lines
 
     def as_root_level(self):
-        self.allow_mlog = False
+        self.allow_mlog = self.as_text
         self.is_root = True
         self.schem_builder.root_exec = self
         self.global_cwd: pathlib.Path = self.cwd
@@ -1386,13 +1394,15 @@ class _executer:
 
         return self.convert_to_var(out)
 
-    def init_instruction(self, keyword, exec_func):
-        instruction = self.Instruction(keyword, exec_func)
+    def init_instruction(self, keyword, exec_func, not_text=False):
+        instruction = self.Instruction(keyword, exec_func, not_text)
         self.instructions.append(instruction)
 
     def exec_instruction(self, inst):
         for i in self.instructions:
             if inst[0].value == i.keyword:
+                if i.not_text and self.as_text:
+                    _error(f"Instruction '{inst[0].value}' not allowed in text output mode", inst[0], self)
                 i.exec_func(inst, self)
                 break
         else:
@@ -1608,18 +1618,28 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--src', required=True, type=pathlib.Path, help="the file to transpile", metavar="source_file")
     parser.add_argument('-o', '--out', type=pathlib.Path, help="the file to write the output to", metavar="output_file")
     parser.add_argument('-c', '--copy', action='store_true', help="copy the output to the clipboard")
+    parser.add_argument('-t', '--text', action='store_true', help="output code for one proc, rather than a schematic")
     args = parser.parse_args()
     with open(args.src, 'r') as f:
         code = f.read()
 
     transpiler = SFMlog()
     start_time = time.perf_counter()
-    out_schem = transpiler.transpile(code, args.src)
+    out_schem = transpiler.transpile(code, args.src, args.text)
     end_time = time.perf_counter()
-
-    print(f"Created schematic '{out_schem.tags["name"]}' in {end_time - start_time:0.2f} seconds" )
+    if not args.text:
+        print(f"Created schematic '{out_schem.tags["name"]}' in {end_time - start_time:0.2f} seconds")
+    else:
+        print(f"Compiled code in {end_time - start_time:0.2f} seconds")
 
     if args.copy:
-        out_schem.write_clipboard()
+        if not args.text:
+            out_schem.write_clipboard()
+        else:
+            pyperclip.copy(out_schem)
     if args.out:
-        out_schem.write_file(args.out)
+        if not args.text:
+            out_schem.write_file(args.out)
+        else:
+            with open(args.out, "w") as f:
+                f.write(out_schem)
