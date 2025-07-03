@@ -127,7 +127,8 @@ class _tokenizer:
         "if": [True],
         "while": [True],
         "for": [True],
-        "strop": [True]
+        "strop": [True],
+        "select": [False, True]
     }
 
     LINK_BLOCKS = ["gate", "foundation", "wall", "container", "afflict", "heater", "conveyor", "duct", "press", "tower", "pad", "projector", "swarmer", "factory", "drill", "router", "door", "illuminator", "processor", "sorter", "spectre", "parallax", "cell", "electrolyzer", "display", "chamber", "mixer", "conduit", "distributor", "crucible", "message", "unloader", "refabricator", "switch", "bore", "bank", "accelerator", "disperse", "vault", "point", "nucleus", "panel", "node", "condenser", "smelter", "pump", "generator", "tank", "reactor", "cultivator", "malign", "synthesizer", "deconstructor", "meltdown", "centrifuge", "radar", "driver", "void", "junction", "diffuse", "pulverizer", "salvo", "bridge", "acropolis", "dome", "reconstructor", "separator", "citadel", "concentrator", "mender", "lancer", "source", "loader", "duo", "melter", "crusher", "fabricator", "redirector", "disassembler", "gigantic", "incinerator", "scorch", "battery", "tsunami", "arc", "compressor", "assembler", "smite", "module", "bastion", "segment", "constructor", "ripple", "furnace", "wave", "foreshadow", "link", "mine", "scathe", "canvas", "diode", "extractor", "fuse", "kiln", "sublimate", "scatter", "cyclone", "titan", "turret", "lustre", "thruster", "shard", "weaver", "huge", "breach", "hail"]
@@ -309,6 +310,7 @@ class _executer:
             executer.init_instruction("mac", inst.I_mac)
             executer.init_instruction("deffun", inst.I_deffun)
             executer.init_instruction("fun", inst.I_fun)
+            executer.init_instruction("call", inst.I_call)
             executer.init_instruction("getmac", inst.I_getmac)
             executer.init_instruction("setmac", inst.I_setmac)
             executer.init_instruction("type", inst.I_type)
@@ -410,10 +412,12 @@ class _executer:
                 _error("'end' expected, but not found", inst[0], executer)
             if inst[1].type != "identifier":
                 _error("Invalid name for macro", inst[1], executer)
+            if inst[1].value in executer.functions:
+                _error(f"Can't redefine function '{inst[1].value}' as a macro", inst[1], executer)
             mac_args = []
             for arg in inst.tokens[2:-1]:
                 if arg.type != "identifier":
-                    _error("Invalid name for macro argument", arg, executer)
+                    _error("Invalid name for macro argument", arg, executer, inst[1], executer)
                 mac_args.append(arg)
             executer.macros[inst[1].value] = _Macro(inst[1].value, mac_code, mac_args, executer.cwd)
 
@@ -450,6 +454,8 @@ class _executer:
                 _error("Invalid name for function", inst[1], executer)
             if inst[1].value in executer.functions:
                 _error(f"Function '{inst[1].value}' is already defined", inst[1], executer)
+            if inst[1].value in executer.macros:
+                _error(f"Can't redefine macro '{inst[1].value}' as a function", inst[1], executer)
             fun_args = []
             for arg_token in inst.tokens[2:-1]:
                 out_token = arg_token.with_scope(f"f_{inst[1].value}_")
@@ -482,6 +488,16 @@ class _executer:
                 for index, arg in enumerate(func.args):
                     if arg[1] in ["out", "inout"] and inst[index+2].type in ["identifier", "global_identifier"] and inst[index+2].value != "_":
                         executer.output.extend([_tokenizer.token("instruction", "set"), executer.resolve_var(inst[2+index]).with_scope(executer.scope_str), arg[0], _tokenizer.token("line_break", "\n")])
+            else:
+                _error(f"Unknown function '{inst[1].value}'", inst[1], executer)
+
+        def I_call(inst, executer): # Calls either a macro or a function
+            if inst[1].value in executer.macros:
+                _executer.Instructions.I_mac(inst, executer)
+            elif inst[1].value in executer.functions:
+                _executer.Instructions.I_fun(inst, executer)
+            else:
+                _error(f"Unknown macro or function '{inst[1].value}'", inst[1], executer)
 
         def I_getmac(inst, executer): # Writes a macro to a variable
             if inst[2].value not in executer.macros:
