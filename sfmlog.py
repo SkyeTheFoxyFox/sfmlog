@@ -1072,6 +1072,7 @@ class _executer:
         if self.is_processor or self.is_root and self.as_text:
             self.expand_functions()
             self.check_func_recursion()
+            self.output = _post_processor.process(self.output)
         if self.is_root:
             self.schem_builder.processor_type = self.global_vars["global_PROCESSOR_TYPE"]
             self.schem_builder.set_name(self.resolve_string(self.global_vars["global_SCHEMATIC_NAME"]))
@@ -1474,6 +1475,38 @@ class _executer:
                         for new_func in functions[func]:
                             if new_func not in checked_funcs and new_func not in funcs_to_check and new_func not in funcs_to_check_copy:
                                 funcs_to_check.append(new_func)
+
+class _post_processor:
+    def process(code: list[_tokenizer.token]) -> list[_tokenizer.token]:
+        code = _post_processor._expand_labels(code)
+        return code
+
+    def _parse_labels(code: list[_tokenizer.token]) -> dict[str, int]:
+        lines = 0
+        out = {}
+        for token in code:
+            if token.type == "label":
+                out[str(token)[:-1]] = lines
+            elif token.type == "instruction":
+                lines += 1
+        return out
+
+    def _expand_labels(code: list[_tokenizer.token]) -> list[_tokenizer.token]:
+        out_code = []
+        was_jump = False
+        labels = _post_processor._parse_labels(code)
+        for token in code:
+            if token.type == "identifier" and str(token) in labels and not was_jump:
+                out_code.append(_tokenizer.token("number", labels[str(token)]))
+                was_jump = False
+            else:
+                if token.type == "instruction" and token.value == "jump":
+                    was_jump = True
+                else:
+                    was_jump = False
+                out_code.append(token)
+        return out_code
+
 
 class _schem_builder:
     class Proc:
