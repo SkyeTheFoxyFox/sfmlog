@@ -81,6 +81,9 @@ class _Function:
         self.args: list[tuple[_tokenizer.token, str]] = args
         self.cwd: pathlib.Path = cwd
 
+    def __str__(self):
+        return f"function({self.name})"
+
 class SFMlog:
     def __init__(self):
         pass
@@ -311,8 +314,6 @@ class _executer:
             executer.init_instruction("deffun", inst.I_deffun)
             executer.init_instruction("fun", inst.I_fun)
             executer.init_instruction("call", inst.I_call)
-            executer.init_instruction("getmac", inst.I_getmac)
-            executer.init_instruction("setmac", inst.I_setmac)
             executer.init_instruction("type", inst.I_type)
             executer.init_instruction("pset", inst.I_pset)
             executer.init_instruction("pop", inst.I_pop)
@@ -422,8 +423,9 @@ class _executer:
             executer.macros[inst[1].value] = _Macro(inst[1].value, mac_code, mac_args, executer.cwd)
 
         def I_mac(inst, executer): # Calls a macro
-            if inst[1].value in executer.macros:
-                mac = executer.macros[inst[1].value]
+            mac_token = executer.resolve_var(inst[1])
+            if mac_token.type == "macro":
+                mac = mac_token.value
                 if mac.name not in executer.macro_run_counts:
                     executer.macro_run_counts[mac.name] = 0
                 mac_executer = executer.child(inst, mac.code, )
@@ -476,8 +478,9 @@ class _executer:
             executer.functions[inst[1].value] = _Function(inst[1].value, fun_code, fun_args, executer.cwd)
 
         def I_fun(inst, executer): # Calls a function
-            if inst[1].value in executer.functions:
-                func = executer.functions[inst[1].value]
+            func_token = executer.resolve_var(inst[1])
+            if func_token.type == "function":
+                func = func_token.value
                 if func.name not in executer.called_functions:
                     executer.called_functions.append(func.name)
                 for index, arg in enumerate(func.args):
@@ -492,25 +495,13 @@ class _executer:
                 _error(f"Unknown function '{inst[1].value}'", inst[1], executer)
 
         def I_call(inst, executer): # Calls either a macro or a function
-            if inst[1].value in executer.macros:
+            call = executer.resolve_var(inst[1])
+            if call.type == "macro":
                 _executer.Instructions.I_mac(inst, executer)
-            elif inst[1].value in executer.functions:
+            elif call.type == "function":
                 _executer.Instructions.I_fun(inst, executer)
             else:
                 _error(f"Unknown macro or function '{inst[1].value}'", inst[1], executer)
-
-        def I_getmac(inst, executer): # Writes a macro to a variable
-            if inst[2].value not in executer.macros:
-                _error(f"Unknown macro '{inst[2].value}'", inst[2], executer)
-            executer.write_var(inst[1], executer.convert_to_var(executer.macros[inst[2].value]))
-
-        def I_setmac(inst, executer): # Sets a macro from a variable
-            mac = executer.resolve_var(inst[2])
-            if mac.type != "macro":
-                _error(f"Variable '{inst[2].value}' isn't of type 'macro'", inst[2], executer)
-            if inst[1].type != "identifier":
-                _error("Invalid name for macro", inst[1], executer)
-            executer.macros[inst[1].value] = mac.value
 
         def I_type(inst, executer): # Gets the type of a value
             executer.write_var(inst[1], executer.convert_to_var(executer.resolve_var(inst[2]).type))
@@ -1180,6 +1171,8 @@ class _executer:
                 return _tokenizer.token("table", tbl, exportable = False)
             case _Macro():
                 return _tokenizer.token("macro", value, exportable = False)
+            case _Function():
+                return _tokenizer.token("function", value, exportable = False)
             case _Color():
                 return _tokenizer.token("color", value)
             case io.TextIOWrapper():
@@ -1211,7 +1204,11 @@ class _executer:
                 raise Exception(f"Unable to convert type '{var.type}'")
 
     def resolve_var(self, name: _tokenizer.token):
-        if name.type == "identifier" and str(name) in self.vars:
+        if name.type == "identifier" and name.value in self.macros:
+            return self.convert_to_var(self.macros[name.value]).with_scope(self.scope_str).at_token(name)
+        elif name.type == "identifier" and name.value in self.functions:
+            return self.convert_to_var(self.functions[name.value]).with_scope(self.scope_str).at_token(name)
+        elif name.type == "identifier" and str(name) in self.vars:
             return self.vars[str(name)].with_scope(self.scope_str).at_token(name)
         elif name.type == "global_identifier" and str(name) in self.global_vars:
             return self.global_vars[str(name)].with_scope("").at_token(name)
