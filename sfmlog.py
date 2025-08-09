@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 import sys
-sys.path.append("/home/skye/code/python/mindustry/pymsch/src")
-
-import sys
 import argparse
 import pathlib
 import re
