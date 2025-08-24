@@ -5,6 +5,7 @@ if equal varType "global_identifier"
     pset $_STD_LOGGING_loggingLevel 1
 end
 
+# Sets logging level
 defmac SetLogging level
     if equal level "debug"
         pset $_STD_LOGGING_loggingLevel 0
@@ -36,6 +37,7 @@ defmac _STD_LOGGING_FormatTime outStr time
     strop cat outStr minutes ":" seconds "." millis
 end
 
+# Sends a debug log
 defmac LogDebug msg
     if lessThanEq $_STD_LOGGING_loggingLevel 0
         mac _STD_LOGGING_FormatTime time @ptime
@@ -43,6 +45,7 @@ defmac LogDebug msg
     end
 end
 
+# Sends an info log
 defmac LogInfo msg
     if lessThanEq $_STD_LOGGING_loggingLevel 1
         mac _STD_LOGGING_FormatTime time @ptime
@@ -50,6 +53,7 @@ defmac LogInfo msg
     end
 end
 
+# Sends a warning log
 defmac LogWarning msg
     if lessThanEq $_STD_LOGGING_loggingLevel 2
         mac _STD_LOGGING_FormatTime time @ptime
@@ -57,6 +61,7 @@ defmac LogWarning msg
     end
 end
 
+# Sends an error log
 defmac LogError msg
     if lessThanEq $_STD_LOGGING_loggingLevel 3
         mac _STD_LOGGING_FormatTime time @ptime
