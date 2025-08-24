@@ -1,0 +1,76 @@
+# A library implementing cell based FIFO buffers
+
+# Creates a fifo buffer object
+defmac NewFIFO fifo cell size
+    table from fifo "type" "fifo" "cell" cell "size" size "readPointer" readPointer "writePointer" writePointer
+end
+
+# Reads a value from a fifo. If no values are in the buffer it returns null
+defmac ReadFIFO fifo value
+    call AssertFIFO fifo
+    table get cell fifo "cell"
+    table get size fifo "size"
+    table get readPointer fifo "readPointer"
+    table get writePointer fifo "writePointer"
+    jump Invalid equal readPointer writePointer
+        read value cell readPointer
+        op add readPointer readPointer 1
+        op mod readPointer readPointer size
+    jump End always
+    Invalid:
+        set value null
+    End:
+end
+
+# Writes a value to a fifo. If the buffer is full it fails to write
+defmac WriteFIFO fifo value
+    call AssertFIFO fifo
+    table get cell fifo "cell"
+    table get size fifo "size"
+    table get readPointer fifo "readPointer"
+    table get writePointer fifo "writePointer"
+    op add tempWritePointer writePointer 1
+    op mod tempWritePointer tempWritePointer size
+    jump End equal readPointer tempWritePointer
+        write value cell writePointer
+        set writePointer tempWritePointer
+    End:
+end
+
+# Gets the number of values in the buffer
+defmac GetFIFOLength fifo length
+    call AssertFIFO fifo
+    table get size fifo "size"
+    table get readPointer fifo "readPointer"
+    table get writePointer fifo "writePointer"
+    op sub lengthSmall writePointer readPointer
+    op add lengthBig size lengthSmall
+    select length greaterThanEq writePointer readPointer lengthSmall lengthBig
+end
+
+# Checks if the buffer has any space remaining to write to
+defmac CanWriteFIFO fifo canWrite
+    call AssertFIFO fifo
+    table get size fifo "size"
+    table get readPointer fifo "readPointer"
+    table get writePointer fifo "writePointer"
+    op add tempWritePointer writePointer 1
+    op mod tempWritePointer tempWritePointer size
+    op notEqual canWrite readPointer tempWritePointer
+end
+
+# Asserts that a value is a fifo object
+defmac AssertFIFO input
+    type type input
+    if notEqual type "table"
+        error "Expected FIFO, found '" type "'"
+    end
+    if in input "type"
+        table get value input "type"
+        if notEqual value "fifo"
+            error "Expected FIFO, found '" value "'"
+        end
+    else
+        error "Expected FIFO, found 'table'"
+    end
+end
