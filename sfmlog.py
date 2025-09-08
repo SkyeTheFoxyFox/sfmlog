@@ -183,7 +183,7 @@ class _tokenizer:
     def tokenize(self, code: str, file: str) -> list[token]:
         tokens = []
         line_regex = r"^[^#\n].+$[\n;]?"
-        token_regex = r"#.*|(\".*?\"|[^ \n;]+|[\n;])"
+        token_regex = r"#.*|(\".*?\"|[^ \t\n;]+|[\n;])"
         prev_instruction = ""
         prev_token_type = "line_break"
         dist_from_prev_instruction = 0
