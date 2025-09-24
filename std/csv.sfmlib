@@ -1,0 +1,68 @@
+# A library for parsing CSV files
+
+# Parses CSV into either a list of lists, or if header is true, a list of tables
+defmac ParseCSV output filePath delimiter header
+    #defaults
+    if equal delimiter null
+        pset delimiter ","
+    end
+    if equal header null
+        pset header false
+    end
+
+    file open file filePath
+    file read csvData file
+    file close file
+
+    pset firstLine true 
+    list from output
+
+    strop split lines csvData "\n"
+    for enumerate index line lines
+        strop rematch comment line "^\s*//"
+        if notEqual comment null
+            list del lines index
+        else
+            strop split elements line delimiter
+            if equal header false
+                for enumerate i v elements
+                    strop rematch isNum v "^(?:(?:-?[0-9]*.[0-9]+)|(?:-?[0-9]+))(?:e[0-9]+)?$"
+                    if notEqual isNum null
+                        strop num v v
+                        list set elements v i
+                    end
+                    if equal v "true"
+                        list set elements true i
+                    end
+                    if equal v "false"
+                        list set elements false i
+                    end
+                end
+                list append output elements
+            else
+                if equal firstLine true
+                    pset headerLookup elements
+                    pset firstLine false
+                else
+                    table from lineTable
+                    for enumerate i v elements
+                        strop rematch isNum v "^(?:(?:-?[0-9]*.[0-9]+)|(?:-?[0-9]+))(?:e[0-9]+)?$"
+                        if notEqual isNum null
+                            log v
+                            strop num v v
+                        end
+                        if equal v "true"
+                            pset v true
+                        end
+                        if equal v "false"
+                            pset v false
+                        end
+                        list get headerValue headerLookup i
+                        table set lineTable headerValue v
+                    end
+                    list append output lineTable
+                end
+            end
+        end
+    end
+end

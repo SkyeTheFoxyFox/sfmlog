@@ -937,7 +937,7 @@ class _executer:
                     lst = executer.resolve_var(inst[4])
                     if lst.type != "list":
                         _error(f"Expected type 'list', got '{lst.type}'", inst[4], executer)
-                    for_iter = iter(enumerate(lst.value))
+                    for_iter = enumerate(dill.loads(dill.dumps(lst.value)))
                 case "table":
                     tbl = executer.resolve_var(inst[4])
                     if tbl.type != "table":
