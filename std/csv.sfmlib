@@ -48,7 +48,6 @@ defmac ParseCSV output filePath delimiter header
                     for enumerate i v elements
                         strop rematch isNum v "^(?:(?:-?[0-9]*.[0-9]+)|(?:-?[0-9]+))(?:e[0-9]+)?$"
                         if notEqual isNum null
-                            log v
                             strop num v v
                         end
                         if equal v "true"
