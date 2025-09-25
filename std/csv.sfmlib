@@ -18,10 +18,10 @@ defmac ParseCSV output filePath delimiter header
     list from output
 
     strop split lines csvData "\n"
-    for enumerate index line lines
+    for list line lines
         strop rematch comment line "^\s*//"
         if notEqual comment null
-            list del lines index
+        elif equal line ""
         else
             strop split elements line delimiter
             if equal header false
@@ -57,7 +57,7 @@ defmac ParseCSV output filePath delimiter header
                             pset v false
                         end
                         list get headerValue headerLookup i
-                        table set lineTable headerValue v
+                        table set lineTable v headerValue
                     end
                     list append output lineTable
                 end

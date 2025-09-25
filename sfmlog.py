@@ -783,8 +783,8 @@ class _executer:
                         tbl = var.value if var.type == "table" else {}
                     else:
                         tbl = {}
-                    key = executer.resolve_var(inst[3])
-                    value = executer.resolve_var(inst[4])
+                    value = executer.resolve_var(inst[3])
+                    key = executer.resolve_var(inst[4])
                     if key.type in ["list", "table"]:
                         _error(f"Unable to write type '{key.type}' to table key", inst[3], executer)
                     tbl[executer.convert_var_to_py(key)] = value
@@ -826,6 +826,15 @@ class _executer:
                     key = executer.resolve_var(inst[4])
                     isIn = executer.convert_var_to_py(key) in tbl
                     executer.write_var(output, executer.convert_to_var(isIn)) 
+                case "len":
+                    output = inst[2]
+                    input_table = inst[3]
+                    if input_table.type in ["identifier", "global_identifier"]:
+                        var = executer.resolve_var(input_table)
+                        tbl = var.value if var.type == "table" else {}
+                    else:
+                        tbl = {}
+                    executer.write_var(output, executer.convert_to_var(len(tbl)))
                 # json excluded for now because it's basically useless for sfmlog
                 #case "readjson": # Creates a table from a json string
                 #    output_table = inst[2]
@@ -932,7 +941,7 @@ class _executer:
                     lst = executer.resolve_var(inst[3])
                     if lst.type != "list":
                         _error(f"Expected type 'list', got '{lst.type}'", inst[3], executer)
-                    for_iter = iter(lst.value)
+                    for_iter = iter(dill.loads(dill.dumps(lst.value)))
                 case "enumerate":
                     lst = executer.resolve_var(inst[4])
                     if lst.type != "list":
@@ -942,7 +951,7 @@ class _executer:
                     tbl = executer.resolve_var(inst[4])
                     if tbl.type != "table":
                         _error(f"Expected type 'table', got '{tbl.type}'", inst[4], executer)
-                    for_iter = tbl.value.items()
+                    for_iter = dill.loads(dill.dumps(tbl.value)).items()
 
             for i in for_iter:
                 if isinstance(i, tuple):
