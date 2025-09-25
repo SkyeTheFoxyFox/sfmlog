@@ -30,11 +30,9 @@ defmac ParseCSV output filePath delimiter header
                     if notEqual isNum null
                         strop num v v
                         list set elements v i
-                    end
-                    if equal v "true"
+                    elif equal v "true"
                         list set elements true i
-                    end
-                    if equal v "false"
+                    elif equal v "false"
                         list set elements false i
                     end
                 end
@@ -49,11 +47,9 @@ defmac ParseCSV output filePath delimiter header
                         strop rematch isNum v "^(?:(?:-?[0-9]*.[0-9]+)|(?:-?[0-9]+))(?:e[0-9]+)?$"
                         if notEqual isNum null
                             strop num v v
-                        end
-                        if equal v "true"
+                        elif equal v "true"
                             pset v true
-                        end
-                        if equal v "false"
+                        elif equal v "false"
                             pset v false
                         end
                         list get headerValue headerLookup i
