@@ -26,7 +26,6 @@ def _error(text: str, token, executer):
         print(f"({token.line},{token.column})")
     else:
         print(f"({token.line},{token.column}) in '{token.file.resolve()}'")
-    raise Exception()
     sys.exit(2)
 
 def _warning(text: str, token, executer):
