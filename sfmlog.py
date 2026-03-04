@@ -455,9 +455,9 @@ class _executer:
                                 call_args.append(lst_var)
                             else:
                                 for var in lst_var.value:
-                                    call_args.append(executer.resolve_var(var))
-                    elif arg.type == "identifier":
-                        call_args.append(executer.resolve_var(arg))
+                                    call_args.append(var)
+                    else:
+                        call_args.append(arg)
 
                 for index, arg in enumerate(mac.args):
                     if arg.type == "identifier":
