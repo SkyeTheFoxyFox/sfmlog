@@ -26,6 +26,7 @@ def _error(text: str, token, executer):
         print(f"({token.line},{token.column})")
     else:
         print(f"({token.line},{token.column}) in '{token.file.resolve()}'")
+    raise Exception()
     sys.exit(2)
 
 def _warning(text: str, token, executer):
@@ -171,6 +172,9 @@ class _tokenizer:
         def at_token(self, token):
             return _tokenizer.token(self.type, self.value, token.line, token.column, token.file , scope=self.scope, exportable=self.exportable)
 
+        def as_type(self, type):
+            return _tokenizer.token(type, self.value, self.line, self.column, self.file, scope=self.scope, exportable=self.exportable)
+
         def resolve_string(self):
             if self.type == "string":
                 return self.value[1:-2]
@@ -273,6 +277,9 @@ class _tokenizer:
 
         if string  == "null":
             return ("null", string)
+
+        if re.search(r"\.\.\.$", string):
+            return ("expansion_identifier", string[:-3])
 
         return ("identifier", string)
 
@@ -416,9 +423,12 @@ class _executer:
             if inst[1].value in executer.functions:
                 _error(f"Can't redefine function '{inst[1].value}' as a macro", inst[1], executer)
             mac_args = []
-            for arg in inst.tokens[2:-1]:
-                if arg.type != "identifier":
+            for index, arg in enumerate(inst.tokens[2:-1]):
+                if arg.type not in ["identifier", "expansion_identifier"]:
                     _error("Invalid name for macro argument", arg, executer, inst[1], executer)
+                if arg.type == "expansion_identifier":
+                    if index < (len(inst.tokens[2:-1]) - 1):
+                        _error("Invalid use of expansion identifier not at end of macro definition", arg, executer)
                 mac_args.append(arg)
             executer.macros[inst[1].value] = _Macro(inst[1].value, mac_code, mac_args, executer.cwd)
 
@@ -433,18 +443,61 @@ class _executer:
                 mac_executer.owners = executer.owners + [executer.spawn_instruction]
                 mac_executer.cwd = mac.cwd
                 mac_executer.vars = {}
+
+                raw_call_args = inst.tokens[2:-1]
+                call_args = []
+                for index, arg in enumerate(raw_call_args):
+                    if arg.type == "expansion_identifier":
+                        if index < len(raw_call_args) - 1:
+                            _error("Invalid use of expansion identifier not at end of macro call", arg, executer)
+                        else:
+                            lst_var = executer.resolve_var(arg.as_type("identifier"))
+                            if lst_var.type != "list":
+                                call_args.append(lst_var)
+                            else:
+                                for var in lst_var.value:
+                                    call_args.append(executer.resolve_var(var))
+                    elif arg.type == "identifier":
+                        call_args.append(executer.resolve_var(arg))
+
                 for index, arg in enumerate(mac.args):
-                    var_token = inst[index + 2] if index + 2 in inst else executer.convert_to_var(None)
-                    mac_executer.write_var(arg, executer.resolve_var(var_token))
+                    if arg.type == "identifier":
+                        var_token = call_args[index] if len(call_args) > index else executer.convert_to_var(None)
+                        mac_executer.write_var(arg, executer.resolve_var(var_token))
+                    elif arg.type == "expansion_identifier":
+                        remaining_args = call_args[index:] if len(call_args) > index else []
+                        remaining_args_resolved = []
+                        for rarg in remaining_args:
+                            remaining_args_resolved.append(executer.resolve_var(rarg))
+                        mac_executer.write_var(arg.as_type("identifier"), executer.convert_to_var(remaining_args_resolved))
+
                 mac_executer.macros = executer.macros.copy()
 
                 executer.macro_run_counts[mac.name] += 1
                 mac_executer.execute()
                 executer.output.extend(mac_executer.output)
+                out_vals = []
                 for index, arg in enumerate(mac.args):
-                    if index + 2 in inst:
-                        var_token = inst[index + 2]
-                        executer.write_var(var_token, mac_executer.resolve_var(arg))
+                    if arg.type == "identifier" and len(call_args) > index:
+                        out_vals.append(mac_executer.resolve_var(arg))
+                    elif arg.type == "expansion_identifier" and len(call_args) > index:
+                        lst_var = mac_executer.resolve_var(arg.as_type("identifier"))
+                        if lst_var.type != "list":
+                            lst = [lst_var]
+                        else:
+                            lst = lst_var.value
+                        for val in lst:
+                            out_vals.append(mac_executer.resolve_var(val))
+
+                for index, arg in enumerate(raw_call_args):
+                    if arg.type == "identifier":
+                        val = out_vals[index] if len(out_vals) > index else executer.convert_to_var(None)
+                        executer.write_var(arg, val)
+                    elif arg.type == "expansion_identifier":
+                        vals = out_vals[index:] if len(out_vals) > index else []
+                        executer.write_var(arg.as_type("identifier"), executer.convert_to_var(vals))
+
+
             else:
                 _error(f"Unknown macro '{inst[1].value}'", inst[1], executer)
             
@@ -1210,6 +1263,8 @@ class _executer:
                 return {k: self.convert_var_to_py(v) for k, v in var.value.items()}
             case "color":
                 return (var.r, var.g, var.b, var.a)
+            case "expansion_identifier":
+                _error("Unexpected expansion identifier", var, self)
             case _:
                 raise Exception(f"Unable to convert type '{var.type}'")
 
@@ -1224,6 +1279,8 @@ class _executer:
             return self.global_vars[str(name)].with_scope("").at_token(name)
         elif name.type == "content" and (return_value := self.resolve_special(str(name))) is not None:
             return self.convert_to_var(return_value)
+        elif name.type == "expansion_identifier":
+            _error("Unexpected expansion identifier", name, self)
         else:
             return name.with_scope(self.scope_str)
 
