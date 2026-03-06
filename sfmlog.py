@@ -220,6 +220,9 @@ class _tokenizer:
         if string in "\n;":
             return ("line_break", "\n")
 
+        if string == "|":
+            return ("break", "|")
+
         if string[0] == '"' and string[-1] == '"' :
             return ("string", string)
 
@@ -477,7 +480,7 @@ class _executer:
                 executer.output.extend(mac_executer.output)
                 out_vals = []
                 for index, arg in enumerate(mac.args):
-                    if arg.type == "identifier" and len(call_args) > index:
+                    if arg.type in ["identifier", "global_identifier"] and len(call_args) > index:
                         out_vals.append(mac_executer.resolve_var(arg))
                     elif arg.type == "expansion_identifier" and len(call_args) > index:
                         lst_var = mac_executer.resolve_var(arg.as_type("identifier"))
@@ -489,7 +492,7 @@ class _executer:
                             out_vals.append(mac_executer.resolve_var(val))
 
                 for index, arg in enumerate(raw_call_args):
-                    if arg.type == "identifier":
+                    if arg.type in ["identifier", "global_identifier"]:
                         val = out_vals[index] if len(out_vals) > index else executer.convert_to_var(None)
                         executer.write_var(arg, val)
                     elif arg.type == "expansion_identifier":
